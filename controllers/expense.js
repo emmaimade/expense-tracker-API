@@ -55,10 +55,52 @@ const getPastWeekExpenses = async (req, res) => {
     }
 }
 
+const getPastMonthExpenses = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const today = new Date();
+        const lastMonth = new Date();
+        lastMonth.setMonth(today.getMonth() - 1);
 
+        const expenses = await Expense.find({
+            userId,
+            date: {
+                $gte: lastMonth,
+                $lte: today
+            }
+        }).sort({ date: -1 });
+
+        res.status(200).json({ message: "Expenses for Past Month", expenses});
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+}
+
+const getThreeMonthsExpenses = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const today = new Date();
+        const last_3_months = new Date();
+        last_3_months.setMonth(today.getMonth() - 3);
+
+        const expenses = await Expense.find({
+            userId,
+            date: {
+                $gte: last_3_months,
+                $lte: today
+            }
+        }).sort({ date: -1 });
+
+        res.status(200).json({ message: "Expenses for Past 3 Months", expenses});
+    } catch (error) {
+        res.status(500).json({ error: "Internal Server Error" });
+    }
+}
 
 module.exports = {
     addExpense,
     getExpenses,
-    getPastWeekExpenses
+    getPastWeekExpenses,
+    getPastMonthExpenses,
+    getThreeMonthsExpenses
 }
