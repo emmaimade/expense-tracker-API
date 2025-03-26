@@ -25,6 +25,16 @@ const addExpense = async (req, res) => {
     }
 }
 
+const getExpenses = async (req, res) => {
+    try {
+        const expenses = await Expense.find({ userId: req.user.id });
+        res.status(200).json(expenses);
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+}
+
 module.exports = {
-    addExpense
+    addExpense,
+    getExpenses
 }
