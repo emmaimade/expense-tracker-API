@@ -34,7 +34,31 @@ const getExpenses = async (req, res) => {
     }
 }
 
+const getPastWeekExpenses = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const today = new Date();
+        const lastWeek = new Date();
+        lastWeek.setDate(today.getDate() - 7);
+
+        const expenses = await Expense.find({
+            userId,
+            date: {
+                $gte: lastWeek,
+                $lte: today
+            }
+        }).sort({ date: -1 });
+
+        res.status(200).json({ message: "Expenses for Past Week", expenses});
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });   
+    }
+}
+
+
+
 module.exports = {
     addExpense,
-    getExpenses
+    getExpenses,
+    getPastWeekExpenses
 }
