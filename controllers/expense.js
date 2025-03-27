@@ -97,10 +97,65 @@ const getThreeMonthsExpenses = async (req, res) => {
     }
 }
 
+const getCustomExpenses = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { startDate, endDate } = req.body;
+        
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: "Please fill all the fields" });
+        }
+
+        if (isNaN(new Date(startDate)) || isNaN(new Date(endDate))) {
+            return res.status(400).json({ error: "Invalid date format, use YYYY-MM-DD" });
+        }
+
+        const expenses = await Expense.find({
+            userId,
+            date: {
+                $gte: startDate,
+                $lte: endDate
+            }
+        }).sort({ date: -1 });
+
+        res.status(200).json({ message: `Expenses between ${startDate} and ${endDate}`, expenses});
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+}
+
+const updateExpense = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { amount, category, description } = req.body;
+
+        if (!amount || !category || !description) {
+            return res.status(400).json({ error: "Please fill all the fields" });
+        }
+
+        const existingExpense = await Expense.findOne({ userId, _id: req.params.id });
+
+        if (!existingExpense) {
+            return res.status(404).json({ error: "Expense not found" });
+        }
+
+        amount = amount ?? existingExpense.amount;
+        category = category ?? existingExpense.category;
+        description = description ?? existingExpense.description;
+
+        await existingExpense.save();
+        res.status(200).json({ message: "Expense updated successfully", existingExpense });
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+} 
+
 module.exports = {
     addExpense,
     getExpenses,
     getPastWeekExpenses,
     getPastMonthExpenses,
-    getThreeMonthsExpenses
+    getThreeMonthsExpenses,
+    getCustomExpenses,
+    updateExpense
 }
