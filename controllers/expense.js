@@ -148,7 +148,23 @@ const updateExpense = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ error: "Internal Server Error" });
     }
-} 
+}
+
+const deleteExpense = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const expense = await Expense.findOneAndDelete({ userId, _id: req.params.id });
+
+        if (!expense) {
+            return res.status(404).json({ error: "Expense not found" });
+        }
+
+        res.status(200).json({ message: "Expense Deleted Successfully"})
+    } catch (error) {
+        return res.status(500).json({ error: "Internal Server Error" });
+    }
+}
 
 module.exports = {
     addExpense,
@@ -157,5 +173,6 @@ module.exports = {
     getPastMonthExpenses,
     getThreeMonthsExpenses,
     getCustomExpenses,
-    updateExpense
+    updateExpense,
+    deleteExpense
 }
