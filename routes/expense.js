@@ -19,7 +19,7 @@ router.get("/get-expenses", authMiddleware, getExpenses);
 router.get("/get-past-week-expenses", authMiddleware, getPastWeekExpenses);
 router.get("/get-past-month-expenses", authMiddleware, getPastMonthExpenses);
 router.get("/get-three-months-expenses", authMiddleware, getThreeMonthsExpenses);
-router.get("/get-custom-expenses", authMiddleware, getCustomExpenses);
+router.post("/get-custom-expenses", authMiddleware, getCustomExpenses);
 router.put("/update-expense/:id", authMiddleware, updateExpense);
 router.delete("/delete-expense/:id", authMiddleware, deleteExpense);
 
