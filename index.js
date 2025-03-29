@@ -23,5 +23,5 @@ app.use("/user", userRoutes);
 app.use("/expense", expenseRoutes);
 
 app.listen(port, () => {
-    console.log(`Server running on port https://localhost:${port}`);
+    console.log(`Server running on port http://localhost:${port}`);
 })

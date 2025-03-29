@@ -25,7 +25,7 @@ const registerUser = async (req, res) => {
             password: hashedPassword
         });
         
-        res.status(201).json("User created successfully", user);
+        res.status(201).json({ message: "User created successfully", user });
     } catch (error) {
         res.status(500).json({ error: "Internal Server Error" });
     }

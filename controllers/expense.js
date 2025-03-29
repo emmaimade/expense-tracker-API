@@ -30,6 +30,11 @@ const addExpense = async (req, res) => {
 const getExpenses = async (req, res) => {
     try {
         const expenses = await Expense.find({ userId: req.user.id });
+        
+        if (expenses.length === 0) {
+            return res.status(404).json({ message: "No expenses found" });
+        }
+
         res.status(200).json(expenses);
     } catch (error) {
         return res.status(500).json({ error: "Internal Server Error" });
