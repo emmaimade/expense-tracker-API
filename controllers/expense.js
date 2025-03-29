@@ -174,13 +174,13 @@ const deleteExpense = async (req, res) => {
     }
 }
 
-module.exports = {
-    addExpense,
-    getExpenses,
-    getPastWeekExpenses,
-    getPastMonthExpenses,
-    getThreeMonthsExpenses,
-    getCustomExpenses,
-    updateExpense,
-    deleteExpense
-}
+export {
+  addExpense,
+  getExpenses,
+  getPastWeekExpenses,
+  getPastMonthExpenses,
+  getThreeMonthsExpenses,
+  getCustomExpenses,
+  updateExpense,
+  deleteExpense,
+};

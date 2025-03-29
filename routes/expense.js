@@ -23,4 +23,4 @@ router.get("/get-custom-expenses", authMiddleware, getCustomExpenses);
 router.patch("/update-expense/:id", authMiddleware, updateExpense);
 router.delete("/delete-expense/:id", authMiddleware, deleteExpense);
 
-module.exports = router;
+export default router;
