@@ -1,5 +1,6 @@
 import Expense from "../models/Expense.js";
 
+// Create a new expense
 const addExpense = async (req, res) => {
     const { amount, category, description } = req.body;
 
@@ -25,6 +26,7 @@ const addExpense = async (req, res) => {
     }
 }
 
+// Get all expenses
 const getExpenses = async (req, res) => {
     try {
         const expenses = await Expense.find({ userId: req.user.id });
@@ -34,6 +36,7 @@ const getExpenses = async (req, res) => {
     }
 }
 
+// Get expenses for past week
 const getPastWeekExpenses = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -55,6 +58,7 @@ const getPastWeekExpenses = async (req, res) => {
     }
 }
 
+// Get expenses for past month
 const getPastMonthExpenses = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -76,6 +80,7 @@ const getPastMonthExpenses = async (req, res) => {
     }
 }
 
+// Get expenses for past 3 months
 const getThreeMonthsExpenses = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -97,10 +102,11 @@ const getThreeMonthsExpenses = async (req, res) => {
     }
 }
 
+// Get expenses between custom dates
 const getCustomExpenses = async (req, res) => {
     try {
         const userId = req.user.id;
-        const { startDate, endDate } = req.body;
+        const { startDate, endDate } = req.query;
         
         if (!startDate || !endDate) {
             return res.status(400).json({ error: "Please fill all the fields" });
@@ -113,8 +119,8 @@ const getCustomExpenses = async (req, res) => {
         const expenses = await Expense.find({
             userId,
             date: {
-                $gte: startDate,
-                $lte: endDate
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
             }
         }).sort({ date: -1 });
 
@@ -124,6 +130,7 @@ const getCustomExpenses = async (req, res) => {
     }
 }
 
+// Update an expense
 const updateExpense = async (req, res) => {
     try {
         const userId = req.user.id;
@@ -150,6 +157,7 @@ const updateExpense = async (req, res) => {
     }
 }
 
+// Delete an expense
 const deleteExpense = async (req, res) => {
     try {
         const userId = req.user.id;
