@@ -12,6 +12,10 @@ const addExpense = async (req, res) => {
         return res.status(400).json({ error: "Amount must be a positive number" });
     }
 
+    if (!["Groceries", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Others"].includes(category)) {
+        return res.status(400).json({ error: "Invalid category, use Groceries, Leisure, Electronics, Utilities, Clothing, Health, Others" });
+    }
+
     try {
         const expense = await Expense.create({
             userId: req.user.id,
@@ -29,13 +33,18 @@ const addExpense = async (req, res) => {
 // Get all expenses
 const getExpenses = async (req, res) => {
     try {
-        const expenses = await Expense.find({ userId: req.user.id });
+        const expenses = await Expense.find({ userId: req.user.id }).sort({ date: -1 });
         
         if (expenses.length === 0) {
             return res.status(404).json({ message: "No expenses found" });
         }
 
-        res.status(200).json(expenses);
+        const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
+
+    res.status(200).json({
+        expenses,
+        totalExpenses
+    });
     } catch (error) {
         return res.status(500).json({ error: "Internal Server Error" });
     }
@@ -57,7 +66,13 @@ const getPastWeekExpenses = async (req, res) => {
             }
         }).sort({ date: -1 });
 
-        res.status(200).json({ message: "Expenses for Past Week", expenses});
+        const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
+
+        res.status(200).json({ 
+            message: "Expenses for Past Week", 
+            expenses, 
+            totalExpenses
+        });
     } catch (error) {
         return res.status(500).json({ error: "Internal Server Error" });   
     }
@@ -79,7 +94,13 @@ const getPastMonthExpenses = async (req, res) => {
             }
         }).sort({ date: -1 });
 
-        res.status(200).json({ message: "Expenses for Past Month", expenses});
+        const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
+
+        res.status(200).json({ 
+            message: "Expenses for Past Month", 
+            expenses, 
+            totalExpenses 
+        });
     } catch (error) {
         return res.status(500).json({ error: "Internal Server Error" });
     }
@@ -101,7 +122,13 @@ const getThreeMonthsExpenses = async (req, res) => {
             }
         }).sort({ date: -1 });
 
-        res.status(200).json({ message: "Expenses for Past 3 Months", expenses});
+        const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
+
+        res.status(200).json({ 
+            message: "Expenses for Past 3 Months", 
+            expenses, 
+            totalExpenses
+        });
     } catch (error) {
         res.status(500).json({ error: "Internal Server Error" });
     }
@@ -129,7 +156,13 @@ const getCustomExpenses = async (req, res) => {
             }
         }).sort({ date: -1 });
 
-        res.status(200).json({ message: `Expenses between ${startDate} and ${endDate}`, expenses});
+        const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
+
+        res.status(200).json({ 
+            message: `Expenses between ${startDate} and ${endDate}`, 
+            expenses, 
+            totalExpenses 
+        });
     } catch (error) {
         return res.status(500).json({ error: "Internal Server Error" });
     }
