@@ -66,6 +66,10 @@ const getPastWeekExpenses = async (req, res) => {
             }
         }).sort({ date: -1 });
 
+        if (expenses.length === 0) {
+            return res.status(404).json({ message: "No expenses found" });
+        }
+
         const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
 
         res.status(200).json({ 
@@ -93,6 +97,10 @@ const getPastMonthExpenses = async (req, res) => {
                 $lte: today
             }
         }).sort({ date: -1 });
+
+        if (expenses.length === 0) {
+            return res.status(404).json({ message: "No expenses found" });
+        }
 
         const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
 
@@ -122,6 +130,10 @@ const getThreeMonthsExpenses = async (req, res) => {
             }
         }).sort({ date: -1 });
 
+        if (expenses.length === 0) {
+            return res.status(404).json({ message: "No expenses found" });
+        }
+
         const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
 
         res.status(200).json({ 
@@ -141,11 +153,15 @@ const getCustomExpenses = async (req, res) => {
         const { startDate, endDate } = req.query;
         
         if (!startDate || !endDate) {
-            return res.status(400).json({ error: "Please fill all the fields" });
+            return res.status(400).json({ error: "Please provide both start and end dates" });
         }
 
-        if (isNaN(new Date(startDate)) || isNaN(new Date(endDate))) {
+        if (isNaN(new Date(startDate).getTime()) || isNaN(new Date(endDate).getTime())) {
             return res.status(400).json({ error: "Invalid date format, use YYYY-MM-DD" });
+        }
+
+        if (new Date(startDate) > new Date(endDate)) {
+            return res.status(400).json({ error: "Start date must be before end date" });
         }
 
         const expenses = await Expense.find({
@@ -155,6 +171,10 @@ const getCustomExpenses = async (req, res) => {
                 $lte: new Date(endDate)
             }
         }).sort({ date: -1 });
+
+        if (expenses.length === 0) {
+            return res.status(404).json({ message: "No expenses found" });
+        }
 
         const totalExpenses = expenses.reduce((total, expense) => total + expense.amount, 0);
 
