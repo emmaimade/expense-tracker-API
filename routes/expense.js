@@ -14,13 +14,13 @@ import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/add-expense", authMiddleware, addExpense);
+router.post("/", authMiddleware, addExpense);
 router.get("/", authMiddleware, getExpenses);
-router.get("/past-week-expenses", authMiddleware, getPastWeekExpenses);
-router.get("/past-month-expenses", authMiddleware, getPastMonthExpenses);
-router.get("/three-months-expenses", authMiddleware, getThreeMonthsExpenses);
-router.get("/custom-expenses", authMiddleware, getCustomExpenses);
-router.patch("/update-expense/:id", authMiddleware, updateExpense);
-router.delete("/delete-expense/:id", authMiddleware, deleteExpense);
+router.get("/weekly", authMiddleware, getPastWeekExpenses);
+router.get("/monthly", authMiddleware, getPastMonthExpenses);
+router.get("/last-3-months", authMiddleware, getThreeMonthsExpenses);
+router.get("/custom", authMiddleware, getCustomExpenses);
+router.patch("/:id", authMiddleware, updateExpense);
+router.delete("/:id", authMiddleware, deleteExpense);
 
 export default router;
