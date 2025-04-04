@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Expense from "../models/Expense.js";
 
 // Create a new expense
@@ -194,8 +195,9 @@ const updateExpense = async (req, res) => {
         const userId = req.user.id;
         const { amount, category, description } = req.body;
 
-        if (!amount || !category || !description) {
-            return res.status(400).json({ error: "Please fill all the fields" });
+        // Checks if expense Id is valid
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ error: "Invalid expense id" });
         }
 
         const existingExpense = await Expense.findOne({ userId, _id: req.params.id });
@@ -204,9 +206,16 @@ const updateExpense = async (req, res) => {
             return res.status(404).json({ error: "Expense not found" });
         }
 
-        amount = amount ?? existingExpense.amount;
-        category = category ?? existingExpense.category;
-        description = description ?? existingExpense.description;
+        if (amount !== undefined) {
+            if (isNaN(amount) || amount <= 0) {
+                return res.status(404).json({ error: "Amount must be a positive number" });
+            }
+
+            existingExpense.amount = amount;
+        }
+        
+        existingExpense.category = category ?? existingExpense.category;
+        existingExpense.description = description ?? existingExpense.description;
 
         await existingExpense.save();
         res.status(200).json({ message: "Expense updated successfully", existingExpense });
