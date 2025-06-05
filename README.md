@@ -45,7 +45,7 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 
    ```env
    PORT=3000
-   MONGODB_URI=mongodb://localhost:27017/expense-tracker
+   MONGODB_URI=your_db_uri
    JWT_SECRET=your_jwt_secret
    ```
 
