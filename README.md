@@ -1,7 +1,18 @@
 
 # 💰 Expense Tracker API
 
+![Node.js](https://img.shields.io/badge/Node.js-18+-green)
+![Express](https://img.shields.io/badge/Express-4.x-blue)
+![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-green)
+
 A RESTful API built with Node.js, Express, and MongoDB that allows authenticated users to manage their personal expenses. This includes creating, reading, updating, and deleting expense records, as well as filtering expenses by date range.
+
+
+## 🌐 Live Demo
+
+**🔗 [View Live API Documentation](https://expense-tracker-api-hvss.onrender.com/api-docs)**
+
+**Base URL:** `https://expense-tracker-api-hvss.onrender.com`
 
 ---
 
@@ -30,8 +41,8 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/expense-tracker-api.git
-   cd expense-tracker-api
+   git clone https://github.com/your-username/expense-tracker-API.git
+   cd expense-tracker-API
    ```
 
 2. **Install dependencies:**
@@ -81,29 +92,45 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 | DELETE | `/expense/:id`           | Delete an expense                    |
 
 ---
-## 📖 API Documentation
 
-Interactive API documentation is available via Swagger UI:
+## 📋 Usage Examples
 
-**🔗 [View Live API Documentation](https://expense-tracker-api-hvss.onrender.com/api-docs)**
-
-The documentation includes:
-- Interactive endpoint testing
-- Request/response examples  
-- Authentication requirements
-- Parameter details
-- Error response formats
-
-For local development, the documentation is available at `http://localhost:3000/api-docs` when running the server.
-
----
-
-## 🔒 Authorization
-
-All protected routes require a valid JWT token passed via headers:
-
-```http
-Authorization: Bearer <your_token>
+### Register a New User
+```bash
+curl -X POST https://expense-tracker-api-hvss.onrender.com/user/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "john@example.com",
+    "password": "securepassword"
+  }'
+```
+### Add an Expense
+```bash
+curl -X POST https://expense-tracker-api-hvss.onrender.com/expense \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{
+    "description": "Coffee",
+    "amount": 50,
+    "category": "Food",
+    "date": "2025-06-09"
+  }'
+```
+### Sample Response
+```json
+{
+  "success": true,
+  "message": "Expense created successfully",
+  "data": {
+    "_id": "645f1234567890abcdef1234",
+    "description": "Coffee",
+    "amount": 50,
+    "category": "Food",
+    "date": "2025-06-09T00:00:00.000Z"
+  }
+}
 ```
 
 ---
