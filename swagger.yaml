@@ -550,7 +550,7 @@ paths:
                     token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                     user:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      username: "john_doe"
+                      name: "john_doe"
                       email: "john@example.com"
         '401':
           description: Unauthorized - invalid credentials
@@ -595,7 +595,7 @@ paths:
                     data:
                       - id: "64f1a2b3c4d5e6f7g8h9i0j1"
                         description: "Grocery Shopping"
-                        amount: 45.50
+                        amount: 45
                         category: "Groceries"
                         date: "2024-01-15"
                         userId: "64f1a2b3c4d5e6f7g8h9i0j1"
@@ -653,7 +653,7 @@ paths:
                     data:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
                       description: "Grocery Shopping"
-                      amount: 45.50
+                      amount: 45
                       category: "Groceries"
                       date: "2024-01-15"
                       userId: "64f1a2b3c4d5e6f7g8h9i0j1"
