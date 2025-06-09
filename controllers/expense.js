@@ -16,17 +16,19 @@ const addExpense = async (req, res) => {
   if (
     ![
       "Groceries",
+      "Transportation",
       "Leisure",
       "Electronics",
       "Utilities",
       "Clothing",
       "Health",
+      "Education",
       "Others",
     ].includes(category)
   ) {
     return res.status(400).json({
       error:
-        "Invalid category, use Groceries, Leisure, Electronics, Utilities, Clothing, Health, Others",
+        "Invalid category, use Groceries, Transportation, Leisure, Electronics, Utilities, Clothing, Health, Education, Others",
     });
   }
 
