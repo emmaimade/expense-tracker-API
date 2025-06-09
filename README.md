@@ -41,7 +41,7 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/expense-tracker-API.git
+   git clone https://github.com/emmaimade/expense-tracker-API.git
    cd expense-tracker-API
    ```
 
