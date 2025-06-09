@@ -81,6 +81,22 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 | DELETE | `/expense/:id`           | Delete an expense                    |
 
 ---
+## 📖 API Documentation
+
+Interactive API documentation is available via Swagger UI:
+
+**🔗 [View Live API Documentation](https://expense-tracker-api-hvss.onrender.com/api-docs)**
+
+The documentation includes:
+- Interactive endpoint testing
+- Request/response examples  
+- Authentication requirements
+- Parameter details
+- Error response formats
+
+For local development, the documentation is available at `http://localhost:3000/api-docs` when running the server.
+
+---
 
 ## 🔒 Authorization
 
@@ -109,7 +125,9 @@ Authorization: Bearer <your_token>
 │   └── user.js
 │   └── expense.js
 ├── index.js
-└── .env
+├── swagger.yaml
+├── .env
+└── README.md
 ```
 
 ---
