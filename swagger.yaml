@@ -1,0 +1,957 @@
+openapi: 3.0.0
+info:
+  title: Expense Tracker API
+  description: |
+    A RESTful API built with Node.js, Express, and MongoDB that allows authenticated users to manage their personal expenses. 
+    This includes creating, reading, updating, and deleting expense records, as well as filtering expenses by date range.
+    
+    **Features:**
+    - User Registration & Login with JWT Authentication
+    - Create, Read, Update & Delete Expenses
+    - Filter Expenses by Custom Date Range or Past Week
+    - Data Validation & Error Handling
+    - Protected Routes via Middleware
+    - MongoDB Integration with Mongoose
+    
+    **Authentication:**
+    All expense routes require JWT authentication. Include the token in the Authorization header:
+    `Authorization: Bearer <your_token>`
+  version: 1.0.0
+  contact:
+    name: Imade-Taye Emmanuel
+    email: emmaimade14@gmail.com
+  license:
+    name: MIT
+servers:
+  - url: https://expense-tracker-api-hvss.onrender.com
+    description: Production server
+  - url: http://localhost:3000
+    description: Local development server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for authentication
+  
+  schemas:
+    User:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+      properties:
+        id:
+          type: string
+          description: User ID
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        firstName:
+          type: string
+          description: User's firstname
+          example: "john"
+        lastName:
+          type: string
+          description: User's lastname
+          example: "doe"
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "john@example.com"
+        password:
+          type: string
+          format: password
+          description: User's password (hashed in database)
+          example: "password123"
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    
+    UserRegister:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+        - password
+      properties:
+        firstName:
+          type: string
+          description: Desired firstname
+          example: "john"
+          minLength: 3
+          maxLength: 30
+        lastName:
+          type: string
+          description: Desired lastname
+          example: "doe"
+          minLength: 3
+          maxLength: 30
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "john@example.com"
+        password:
+          type: string
+          format: password
+          description: User's password
+          example: "password123"
+          minLength: 6
+    
+    UserLogin:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+          example: "john@example.com"
+        password:
+          type: string
+          format: password
+          description: User's password
+          example: "password123"
+    
+    Expense:
+      type: object
+      required:
+        - userId
+        - description
+        - amount
+        - category
+        - date
+      properties:
+        id:
+          type: string
+          description: Expense ID
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        description:
+          type: string
+          description: Expense description
+          example: "Grocery Shopping"
+          maxLength: 100
+        amount:
+          type: number
+          format: integer
+          description: Expense amount
+          example: 45
+          minimum: 0
+        category:
+          type: string
+          description: Expense category
+          example: "Groceries"
+          enum: ["Groceries", "Leisure", "Transportation", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+        date:
+          type: string
+          format: date
+          description: Expense date
+          example: "2024-01-15"
+        userId:
+          type: string
+          description: ID of the user who owns this expense
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+    
+    ExpenseCreate:
+      type: object
+      required:
+        - description
+        - amount
+        - category
+        - date
+      properties:
+        description:
+          type: string
+          description: Expense description
+          example: "Groceries"
+          maxLength: 100
+        amount:
+          type: number
+          format: integer
+          description: Expense amount
+          example: 45
+          minimum: 0
+        category:
+          type: string
+          description: Expense category
+          example: "Groceries"
+          enum: ["Groceries", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+        date:
+          type: string
+          format: date
+          description: Expense date
+          example: "2024-01-15"
+    
+    ExpenseUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+          description: Expense description
+          example: "Updated Grocery Shopping"
+          maxLength: 100
+        amount:
+          type: number
+          format: integer
+          description: Expense amount
+          example: 50
+          minimum: 0
+        category:
+          type: string
+          description: Expense category
+          example: "Groceries"
+          enum: ["Groceries", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+        date:
+          type: string
+          format: date
+          description: Expense date
+          example: "2024-01-16"
+    
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "User registered successfully"
+        token:
+          type: string
+          description: JWT token for authentication
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "64f1a2b3c4d5e6f7g8h9i0j1"
+            firstName:
+              type: string
+              example: "john"
+            lastName:
+              type: string
+              example: "doe"
+            email:
+              type: string
+              example: "john@example.com"
+    
+    ExpenseResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Expenses retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Expense'
+        total:
+          type: integer
+          description: Total number of expenses
+          example: 25
+        totalAmount:
+          type: number
+          format: integer
+          description: Sum of all expense amounts
+          example: 1250
+    
+    SingleExpenseResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Expense created successfully"
+        data:
+          $ref: '#/components/schemas/Expense'
+    
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error message"
+        error:
+          type: string
+          description: Detailed error information
+          example: "Validation failed for required fields"
+
+paths:
+  /:
+    get:
+      tags:
+        - General
+      summary: API Welcome
+      description: Basic API information and endpoint discovery
+      responses:
+        '200':
+          description: Welcome message with API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Welcome to Expense Tracker API"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  description:
+                    type: string
+                    example: "RESTful API for managing personal expenses"
+                  documentation:
+                    type: string
+                    example: "https://expense-tracker-api-hvss.onrender.com/api-docs"
+                  endpoints:
+                    type: object
+                    properties:
+                      health:
+                        type: string
+                        example: "/health"
+                      docs:
+                        type: string
+                        example: "/api-docs"
+                      auth:
+                        type: object
+                        properties:
+                          register:
+                            type: string
+                            example: "POST /user/register"
+                          login:
+                            type: string
+                            example: "POST /user/login"
+                      expenses:
+                        type: object
+                        properties:
+                          all:
+                            type: string
+                            example: "GET /expense"
+                          weekly:
+                            type: string
+                            example: "GET /expense/weekly"
+                          monthly:
+                            type: string
+                            example: "GET /expense/monthly"
+                          three_months:
+                            type: string
+                            example: "GET /expense/three-months"
+                          custom:
+                            type: string
+                            example: "GET /expense/custom"
+                          create:
+                            type: string
+                            example: "POST /expense"
+                          update:
+                            type: string
+                            example: "PATCH /expense/:id"
+                          delete:
+                            type: string
+                            example: "DELETE /expense/:id"
+                  author:
+                    type: string
+                    example: "Imade-Taye Emmanuel"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      tags:
+        - General
+      summary: Health Check
+      description: Check API health status and database connectivity
+      responses:
+        '200':
+          description: API is healthy and operational
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "OK"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00.000Z"
+                  uptime:
+                    type: number
+                    format: float
+                    description: Server uptime in seconds
+                    example: 3600.123
+                  database:
+                    type: string
+                    example: "connected"
+                  environment:
+                    type: string
+                    example: "production"
+              examples:
+                healthy:
+                  summary: Healthy API response
+                  value:
+                    status: "OK"
+                    timestamp: "2024-01-15T10:30:00.000Z"
+                    uptime: 3600.123
+                    database: "connected"
+                    environment: "production"
+        '503':
+          description: API is unhealthy or experiencing issues
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ERROR"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00.000Z"
+                  database:
+                    type: string
+                    example: "disconnected"
+                  error:
+                    type: string
+                    example: "Database connection failed"
+              examples:
+                unhealthy:
+                  summary: Unhealthy API response
+                  value:
+                    status: "ERROR"
+                    timestamp: "2024-01-15T10:30:00.000Z"
+                    database: "disconnected"
+                    error: "Database connection failed"
+
+  /user/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account with username, email, and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegister'
+            examples:
+              user_registration:
+                summary: User registration example
+                value:
+                  username: "john_doe"
+                  email: "john@example.com"
+                  password: "password123"
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              examples:
+                success:
+                  summary: Successful registration
+                  value:
+                    success: true
+                    message: "User registered successfully"
+                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    user:
+                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
+                      username: "john_doe"
+                      email: "john@example.com"
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                validation_error:
+                  summary: Validation error
+                  value:
+                    success: false
+                    message: "Validation failed"
+                    error: "Email already exists"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user and receive JWT token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+            examples:
+              user_login:
+                summary: User login example
+                value:
+                  email: "john@example.com"
+                  password: "password123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              examples:
+                success:
+                  summary: Successful login
+                  value:
+                    success: true
+                    message: "Login successful"
+                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    user:
+                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
+                      username: "john_doe"
+                      email: "john@example.com"
+        '401':
+          description: Unauthorized - invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_credentials:
+                  summary: Invalid credentials
+                  value:
+                    success: false
+                    message: "Invalid email or password"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /expense:
+    get:
+      tags:
+        - Expenses
+      summary: Get all expenses
+      description: Retrieve all expenses for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Expenses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseResponse'
+              examples:
+                success:
+                  summary: Successful retrieval
+                  value:
+                    success: true
+                    message: "Expenses retrieved successfully"
+                    data:
+                      - id: "64f1a2b3c4d5e6f7g8h9i0j1"
+                        title: "Grocery Shopping"
+                        amount: 45.50
+                        category: "Food"
+                        date: "2024-01-15"
+                        userId: "64f1a2b3c4d5e6f7g8h9i0j1"
+                        createdAt: "2024-01-15T10:30:00.000Z"
+                        updatedAt: "2024-01-15T10:30:00.000Z"
+                    total: 1
+                    totalAmount: 45.50
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    post:
+      tags:
+        - Expenses
+      summary: Add a new expense
+      description: Create a new expense record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseCreate'
+            examples:
+              new_expense:
+                summary: New expense example
+                value:
+                  title: "Grocery Shopping"
+                  amount: 45.50
+                  category: "Food"
+                  date: "2024-01-15"
+      responses:
+        '201':
+          description: Expense created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleExpenseResponse'
+              examples:
+                success:
+                  summary: Successful creation
+                  value:
+                    success: true
+                    message: "Expense created successfully"
+                    data:
+                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
+                      title: "Grocery Shopping"
+                      amount: 45.50
+                      category: "Food"
+                      date: "2024-01-15"
+                      userId: "64f1a2b3c4d5e6f7g8h9i0j1"
+                      createdAt: "2024-01-15T10:30:00.000Z"
+                      updatedAt: "2024-01-15T10:30:00.000Z"
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /expense/weekly:
+    get:
+      tags:
+        - Expenses
+      summary: Get expenses for the past 7 days
+      description: Retrieve expenses from the last week for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Weekly expenses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /expense/monthly:
+    get:
+      tags:
+        - Expenses
+      summary: Get expenses for the past month
+      description: Retrieve expenses from the last 30 days for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Monthly expenses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /expense/three-months:
+    get:
+      tags:
+        - Expenses
+      summary: Get expenses for the last 3 months
+      description: Retrieve expenses from the last 90 days for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Three months expenses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /expense/custom:
+    get:
+      tags:
+        - Expenses
+      summary: Get expenses within a custom date range
+      description: Retrieve expenses between specified start and end dates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          description: Start date for the range (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: endDate
+          in: query
+          required: true
+          description: End date for the range (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2024-01-31"
+      responses:
+        '200':
+          description: Custom range expenses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseResponse'
+        '400':
+          description: Bad request - invalid date parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /expense/{id}:
+    patch:
+      tags:
+        - Expenses
+      summary: Update an expense
+      description: Update an existing expense record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Expense ID
+          schema:
+            type: string
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseUpdate'
+            examples:
+              update_expense:
+                summary: Update expense example
+                value:
+                  title: "Updated Grocery Shopping"
+                  amount: 50.00
+                  category: "Food"
+                  date: "2024-01-16"
+      responses:
+        '200':
+          description: Expense updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleExpenseResponse'
+              examples:
+                success:
+                  summary: Successful update
+                  value:
+                    success: true
+                    message: "Expense updated successfully"
+                    data:
+                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
+                      title: "Updated Grocery Shopping"
+                      amount: 50.00
+                      category: "Food"
+                      date: "2024-01-16"
+                      userId: "64f1a2b3c4d5e6f7g8h9i0j1"
+                      createdAt: "2024-01-15T10:30:00.000Z"
+                      updatedAt: "2024-01-16T09:15:00.000Z"
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Expense not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: Expense not found
+                  value:
+                    success: false
+                    message: "Expense not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    delete:
+      tags:
+        - Expenses
+      summary: Delete an expense
+      description: Delete an existing expense record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Expense ID
+          schema:
+            type: string
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
+      responses:
+        '200':
+          description: Expense deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Expense deleted successfully"
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Expense not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: Expense not found
+                  value:
+                    success: false
+                    message: "Expense not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+tags:
+  - name: General
+    description: General API endpoints (welcome, health check)
+  - name: Authentication
+    description: User registration and login endpoints
+  - name: Expenses
+    description: Expense management endpoints (requires authentication)
