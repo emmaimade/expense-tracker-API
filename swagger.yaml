@@ -473,7 +473,8 @@ paths:
               user_registration:
                 summary: User registration example
                 value:
-                  username: "john_doe"
+                  firstName: "john"
+                  lastName: "doe"
                   email: "john@example.com"
                   password: "password123"
       responses:
@@ -492,7 +493,8 @@ paths:
                     token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                     user:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      username: "john_doe"
+                      firstName: "john"
+                      lastName: "doe"
                       email: "john@example.com"
         '400':
           description: Bad request - validation error
@@ -592,15 +594,15 @@ paths:
                     message: "Expenses retrieved successfully"
                     data:
                       - id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                        title: "Grocery Shopping"
+                        description: "Grocery Shopping"
                         amount: 45.50
-                        category: "Food"
+                        category: "Groceries"
                         date: "2024-01-15"
                         userId: "64f1a2b3c4d5e6f7g8h9i0j1"
                         createdAt: "2024-01-15T10:30:00.000Z"
                         updatedAt: "2024-01-15T10:30:00.000Z"
                     total: 1
-                    totalAmount: 45.50
+                    totalAmount: 45
         '401':
           description: Unauthorized - invalid or missing token
           content:
@@ -631,9 +633,9 @@ paths:
               new_expense:
                 summary: New expense example
                 value:
-                  title: "Grocery Shopping"
-                  amount: 45.50
-                  category: "Food"
+                  description: "Grocery Shopping"
+                  amount: 45
+                  category: "Groceries"
                   date: "2024-01-15"
       responses:
         '201':
@@ -650,9 +652,9 @@ paths:
                     message: "Expense created successfully"
                     data:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      title: "Grocery Shopping"
+                      description: "Grocery Shopping"
                       amount: 45.50
-                      category: "Food"
+                      category: "Groceries"
                       date: "2024-01-15"
                       userId: "64f1a2b3c4d5e6f7g8h9i0j1"
                       createdAt: "2024-01-15T10:30:00.000Z"
@@ -837,9 +839,9 @@ paths:
               update_expense:
                 summary: Update expense example
                 value:
-                  title: "Updated Grocery Shopping"
-                  amount: 50.00
-                  category: "Food"
+                  description: "Updated Grocery Shopping"
+                  amount: 50
+                  category: "Groceries"
                   date: "2024-01-16"
       responses:
         '200':
@@ -856,9 +858,9 @@ paths:
                     message: "Expense updated successfully"
                     data:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      title: "Updated Grocery Shopping"
-                      amount: 50.00
-                      category: "Food"
+                      description: "Updated Grocery Shopping"
+                      amount: 50
+                      category: "Groceries"
                       date: "2024-01-16"
                       userId: "64f1a2b3c4d5e6f7g8h9i0j1"
                       createdAt: "2024-01-15T10:30:00.000Z"
