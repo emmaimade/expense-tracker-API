@@ -3,9 +3,9 @@ import Expense from "../models/Expense.js";
 
 // Create a new expense
 const addExpense = async (req, res) => {
-  const { amount, category, description } = req.body;
+  const { amount, category, description, date } = req.body;
 
-  if (!amount || !category || !description) {
+  if (!amount || !category || !description || !date) {
     return res.status(400).json({ error: "Please fill all the fields" });
   }
 
@@ -32,12 +32,26 @@ const addExpense = async (req, res) => {
     });
   }
 
+  // Validate date
+  if (date) {
+    const parsedDate = new Date(date);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({error: "Invalid date format" });
+    }
+    if (parsedDate > today) {
+      return res.status(400).json({ error: "Date cannot be in the future" });
+    }
+  }
+
   try {
     const expense = await Expense.create({
       userId: req.user.id,
       amount,
       category,
       description,
+      date: date ? new Date(date) : undefined,
     });
 
     res.status(201).json(expense);
@@ -234,7 +248,7 @@ const getCustomExpenses = async (req, res) => {
 const updateExpense = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { amount, category, description } = req.body;
+    const { amount, category, description, date } = req.body;
 
     // Checks if expense Id is valid
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
@@ -262,6 +276,20 @@ const updateExpense = async (req, res) => {
 
     existingExpense.category = category ?? existingExpense.category;
     existingExpense.description = description ?? existingExpense.description;
+
+    // Validate and update date if provided
+    if (date !== undefined) {
+      const parsedDate = new Date(date);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999); // Set to end of today
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+      if (parsedDate > today) {
+        return res.status(400).json({ error: "Date cannot be in the future" });
+      }
+      existingExpense.date = parsedDate;
+    }
 
     await existingExpense.save();
     res
