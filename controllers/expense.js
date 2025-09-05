@@ -365,14 +365,6 @@ const exportExpenses = async (req, res) => {
       });
     }
 
-    const today = new Date();
-    if (parsedStartDate > today || parsedEndDate > today) {
-      return res.status(400).json({ 
-        success: false,
-        error: 'Dates cannot be in the future' 
-      });
-    }
-
     // Validate category
     const validCategories = [
       'Food',
