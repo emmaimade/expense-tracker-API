@@ -386,15 +386,11 @@ const exportExpenses = async (req, res) => {
     }
 
     // Build query
-    const query = { userId, type: 'expense' };
+    const query = { userId };
     query.date = { $gte: parsedStartDate, $lte: parsedEndDate };
     if (category && category !== 'all') {
       query.category = category;
     }
-
-    // Debug logging (remove in production)
-    console.log('Query:', JSON.stringify(query, null, 2));
-    console.log('Date range:', parsedStartDate, 'to', parsedEndDate);
 
     // Fetch expenses with limit
     const expenses = await Expense.find(query).sort({ date: -1 }).limit(1000).lean();
