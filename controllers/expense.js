@@ -327,19 +327,68 @@ const exportExpenses = async (req, res) => {
     const { startDate, endDate, category, fileFormat } = req.query;
     const userId = req.user.id;
 
+    // Set default date range (last 30 days) if not provided
+    let effectiveStartDate = startDate;
+    let effectiveEndDate = endDate;
+    if (!effectiveStartDate || !effectiveEndDate) {
+      const today = new Date();
+      effectiveEndDate = today;
+      const start = new Date(today);
+      start.setDate(today.getDate() - 30);
+      effectiveStartDate = start;
+    }
+
+    // Validate dates
+    const parsedStartDate = new Date(effectiveStartDate);
+    const parsedEndDate = new Date(effectiveEndDate);
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+
+    if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+
+    if (parsedStartDate > parsedEndDate) {
+      return res.status(400).json({ error: 'Start date must be before or equal to end date' });
+    }
+
+    if (parsedStartDate > today || parsedEndDate > today) {
+      return res.status(400).json({ error: 'Dates cannot be in the future' });
+    }
+
+    // Validate category
+    const validCategories = [
+      'Food',
+      'Transportation',
+      'Leisure',
+      'Electronics',
+      'Utilities',
+      'Clothing',
+      'Health',
+      'Education',
+      'Others',
+    ];
+    
+    if (category && category !== 'all' && !validCategories.includes(category)) {
+      return res.status(400).json({
+        error: `Invalid category. Use one of: ${validCategories.join(', ')}`,
+      });
+    }
+
     // Build query
     const query = { userId, type: 'expense' };
-    if (startDate && endDate) {
-      query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
-    }
+    query.date = { $gte: parsedStartDate, $lte: parsedEndDate };
     if (category && category !== 'all') {
       query.category = category;
     }
 
-    // Fetch expenses
-    const expenses = await Expense.find(query).lean();
+    // Fetch expenses with limit
+    const expenses = await Expense.find(query).sort({ date: -1 }).limit(1000).lean();
     if (!expenses.length) {
-      return res.status(404).json({ error: 'No expenses found' });
+      return res.status(404).json({
+        success: false,
+        error: 'No expenses found',
+      });
     }
 
     if (fileFormat === 'csv') {
@@ -347,7 +396,7 @@ const exportExpenses = async (req, res) => {
       const csvContent = [
         'Date,Description,Category,Amount',
         ...expenses.map(exp =>
-          `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description}","${exp.category}","${exp.amount.toFixed(2)}"`
+          `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description.replace(/"/g, '""')}","${exp.category}","${exp.amount.toFixed(2)}"`
         ),
       ].join('\n');
       res.setHeader('Content-Type', 'text/csv');
