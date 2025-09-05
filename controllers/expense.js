@@ -1,4 +1,7 @@
 import mongoose from "mongoose";
+import { createObjectCsvWriter } from "csv-writer";
+import PDFDocument from "pdfkit";
+import { createWriteStream } from 'fs';
 import Expense from "../models/Expense.js";
 
 // Create a new expense
@@ -387,7 +390,7 @@ const exportExpenses = async (req, res) => {
       // PDF Export
       const doc = new PDFDocument();
       const fileName = 'expenses.pdf';
-      const stream = fs.createWriteStream(fileName);
+      const stream = createWriteStream(fileName);
       doc.pipe(stream);
 
       // Header
@@ -439,6 +442,7 @@ const exportExpenses = async (req, res) => {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
 };
+
 export {
   addExpense,
   getExpenses,
