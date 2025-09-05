@@ -426,11 +426,12 @@ const exportExpenses = async (req, res) => {
       doc.pipe(res);
 
       // Header
-      doc.fontSize(20).text('Expense Report', { align: 'center' });
-      doc.fontSize(12).text(
-        `Generated on: ${format(new Date(), 'MMMM dd, yyyy')}`,
-        { align: 'center' }
-      );
+      doc.fontSize(20)
+         .fillColor('black')
+         .text('Expense Report', { align: 'center' });
+         
+      doc.fontSize(12)
+         .text(`Generated on: ${format(new Date(), 'MMMM dd, yyyy')}`, { align: 'center' });
       
       // Show actual date range used (not just query params)
       doc.text(
@@ -455,14 +456,19 @@ const exportExpenses = async (req, res) => {
 
       // Table headers function
       const drawTableHeaders = (yPosition) => {
-        doc.font('Helvetica-Bold').fontSize(10);
+        doc.font('Helvetica-Bold')
+           .fontSize(10)
+           .fillColor('black')
+           .fillOpacity(1);
+           
         doc.text('Date', col1, yPosition);
         doc.text('Description', col2, yPosition);
         doc.text('Category', col3, yPosition);
         doc.text('Amount', col4, yPosition, { align: 'right' });
 
         // Header underline
-        doc.moveTo(col1, yPosition + 15)
+        doc.strokeColor('black')
+           .moveTo(col1, yPosition + 15)
            .lineTo(col1 + tableWidth, yPosition + 15)
            .stroke();
         
@@ -484,10 +490,14 @@ const exportExpenses = async (req, res) => {
         // Row background (alternate colors)
         if (index % 2 === 0) {
           doc.rect(col1, currentY, tableWidth, rowHeight)
-             .fillOpacity(0.1)
-             .fill('#f5f5f5')
-             .fillOpacity(1);
+             .fillOpacity(0.05)
+             .fillColor('#f9f9f9')
+             .fill();
         }
+
+        // Reset fill color and opacity for text
+        doc.fillColor('black')
+           .fillOpacity(1);
 
         // Row data
         doc.text(format(new Date(exp.date), 'MMM dd, yyyy'), col1, currentY + 5);
@@ -496,7 +506,8 @@ const exportExpenses = async (req, res) => {
         doc.text(`$${exp.amount.toFixed(2)}`, col4, currentY + 5, { align: 'right', width: 100 });
 
         // Row separator
-        doc.moveTo(col1, currentY + rowHeight)
+        doc.strokeColor('#e5e5e5')
+           .moveTo(col1, currentY + rowHeight)
            .lineTo(col1 + tableWidth, currentY + rowHeight)
            .stroke();
 
@@ -506,10 +517,26 @@ const exportExpenses = async (req, res) => {
       // Summary
       const total = expenses.reduce((sum, exp) => sum + exp.amount, 0);
       doc.moveDown();
-      doc.font('Helvetica-Bold').text(`Total: $${total.toFixed(2)}`, col4, doc.y, { align: 'right' });
+      
+      // Summary line separator
+      doc.strokeColor('black')
+         .moveTo(col3, doc.y)
+         .lineTo(col1 + tableWidth, doc.y)
+         .stroke();
+         
+      doc.moveDown(0.5);
+      doc.font('Helvetica-Bold')
+         .fillColor('black')
+         .fillOpacity(1)
+         .text(`Total: $${total.toFixed(2)}`, col4, doc.y, { align: 'right', width: 100 });
 
       // Finalize PDF
       doc.end();
+    } else {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid file format. Use "csv" or "pdf"'
+      });
     }
   } catch (error) {
     console.error('Error exporting expenses:', error);
