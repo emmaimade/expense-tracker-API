@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
-import { createObjectCsvWriter } from "csv-writer";
-import PDFDocument from "pdfkit";
-import { createWriteStream } from 'fs';
+import PDFDocument from 'pdfkit';
+import { format } from 'date-fns';
 import Expense from "../models/Expense.js";
 
 // Create a new expense
@@ -325,121 +324,131 @@ const deleteExpense = async (req, res) => {
 
 const exportExpenses = async (req, res) => {
   try {
+    const { startDate, endDate, category, fileFormat } = req.query;
     const userId = req.user.id;
-    const { startDate, endDate, category, format = 'csv' } = req.query;
 
     // Build query
-    const query = { userId };
+    const query = { userId, type: 'expense' };
     if (startDate && endDate) {
-      const parsedStartDate = new Date(startDate);
-      const parsedEndDate = new Date(endDate);
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-
-      if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
-        return res.status(400).json({ error: 'Invalid date format' });
-      }
-      if (parsedStartDate > parsedEndDate) {
-        return res.status(400).json({ error: 'Start date must be before or equal to end date' });
-      }
-      if (parsedEndDate > today) {
-        return res.status(400).json({ error: 'End date cannot be in the future' });
-      }
-      query.date = { $gte: parsedStartDate, $lte: parsedEndDate };
+      query.date = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
     if (category && category !== 'all') {
-      if (!['Food', 'Transportation', 'Leisure', 'Electronics', 'Utilities', 'Clothing', 'Health', 'Education', 'Others'].includes(category)) {
-        return res.status(400).json({ error: 'Invalid category' });
-      }
       query.category = category;
     }
 
     // Fetch expenses
     const expenses = await Expense.find(query).lean();
     if (!expenses.length) {
-      return res.status(404).json({ error: 'No expenses found for the specified filters' });
+      return res.status(404).json({ error: 'No expenses found' });
     }
 
-    if (format === 'csv') {
-      // CSV Export
-      const csvWriter = createObjectCsvWriter({
-        path: 'expenses.csv',
-        header: [
-          { id: 'date', title: 'Date' },
-          { id: 'description', title: 'Description' },
-          { id: 'category', title: 'Category' },
-          { id: 'amount', title: 'Amount' },
-          { id: 'type', title: 'Type' },
-        ],
-      });
-
-      const records = expenses.map(expense => ({
-        date: new Date(expense.date).toISOString().split('T')[0],
-        description: expense.description,
-        category: expense.category,
-        amount: expense.amount.toFixed(2),
-        type: expense.type || 'expense',
-      }));
-
-      await csvWriter.writeRecords(records);
-
+    if (fileFormat === 'csv') {
+      // CSV export
+      const csvContent = [
+        'Date,Description,Category,Amount',
+        ...expenses.map(exp =>
+          `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description}","${exp.category}","${exp.amount.toFixed(2)}"`
+        ),
+      ].join('\n');
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=expenses.csv');
-      res.download('expenses.csv');
-    } else if (format === 'pdf') {
-      // PDF Export
-      const doc = new PDFDocument();
-      const fileName = 'expenses.pdf';
-      const stream = createWriteStream(fileName);
-      doc.pipe(stream);
+      return res.send(csvContent);
+    } else if (fileFormat === 'pdf') {
+      // Create PDF document
+      const doc = new PDFDocument({ margin: 50 });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename=expenses.pdf');
+      doc.pipe(res);
 
       // Header
-      doc.fontSize(16).text('Expense Report', { align: 'center' });
-      doc.fontSize(12).text(`Generated on: ${new Date().toLocaleDateString('en-US')}`, { align: 'center' });
+      doc.fontSize(20).text('Expense Report', { align: 'center' });
+      doc.fontSize(12).text(
+        `Generated on: ${format(new Date(), 'MMMM dd, yyyy')}`,
+        { align: 'center' }
+      );
       if (startDate && endDate) {
-        doc.text(`Date Range: ${new Date(startDate).toLocaleDateString('en-US')} - ${new Date(endDate).toLocaleDateString('en-US')}`, { align: 'center' });
+        doc.text(
+          `Date Range: ${format(new Date(startDate), 'MMM dd, yyyy')} - ${format(new Date(endDate), 'MMM dd, yyyy')}`,
+          { align: 'center' }
+        );
       }
       if (category && category !== 'all') {
         doc.text(`Category: ${category}`, { align: 'center' });
       }
       doc.moveDown(2);
 
-      // Table Header
-      doc.fontSize(10).font('Helvetica-Bold');
-      doc.text('Date', 50, doc.y, { width: 100 });
-      doc.text('Description', 150, doc.y, { width: 200 });
-      doc.text('Category', 350, doc.y, { width: 100 });
-      doc.text('Amount', 450, doc.y, { width: 100, align: 'right' });
-      doc.moveDown(1);
-      doc.font('Helvetica');
+      // Table setup
+      const tableTop = doc.y;
+      const col1 = 50; // Date
+      const col2 = 150; // Description
+      const col3 = 300; // Category
+      const col4 = 400; // Amount
+      const rowHeight = 20;
+      const tableWidth = 500;
+      const maxRowsPerPage = 25; // Pagination: rows per page
 
-      // Table Rows
-      expenses.forEach(expense => {
-        doc.text(new Date(expense.date).toISOString().split('T')[0], 50, doc.y, { width: 100 });
-        doc.text(expense.description, 150, doc.y, { width: 200 });
-        doc.text(expense.category, 350, doc.y, { width: 100 });
-        doc.text(`$${expense.amount.toFixed(2)}`, 450, doc.y, { width: 100, align: 'right' });
-        doc.moveDown(0.5);
+      // Table headers
+      const drawTableHeaders = () => {
+        doc.font('Helvetica-Bold').fontSize(10);
+        doc.text('Date', col1, tableTop);
+        doc.text('Description', col2, tableTop);
+        doc.text('Category', col3, tableTop);
+        doc.text('Amount', col4, tableTop, { align: 'right' });
+
+        // Header underline
+        doc.moveTo(col1, tableTop + 15)
+           .lineTo(col1 + tableWidth, tableTop + 15)
+           .stroke();
+      };
+
+      drawTableHeaders();
+
+      // Table rows
+      doc.font('Helvetica').fontSize(10);
+      let currentY = tableTop + rowHeight;
+      expenses.forEach((exp, index) => {
+        // Check for page break
+        if (index > 0 && index % maxRowsPerPage === 0) {
+          doc.addPage();
+          currentY = 50; // Reset Y position for new page
+          drawTableHeaders(); // Redraw headers
+        }
+
+        // Row background (alternate colors)
+        if (index % 2 === 0) {
+          doc.rect(col1, currentY, tableWidth, rowHeight)
+             .fillOpacity(0.1)
+             .fill('#f5f5f5')
+             .fillOpacity(1);
+        }
+
+        // Row data
+        doc.text(format(new Date(exp.date), 'MMM dd, yyyy'), col1, currentY + 5);
+        doc.text(exp.description, col2, currentY + 5, { width: 140, ellipsis: true });
+        doc.text(exp.category, col3, currentY + 5);
+        doc.text(`$${exp.amount.toFixed(2)}`, col4, currentY + 5, { align: 'right', width: 100 });
+
+        // Row separator
+        doc.moveTo(col1, currentY + rowHeight)
+           .lineTo(col1 + tableWidth, currentY + rowHeight)
+           .stroke();
+
+        currentY += rowHeight;
       });
 
       // Summary
-      const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
-      doc.moveDown(2);
-      doc.font('Helvetica-Bold').text(`Total: $${totalAmount.toFixed(2)}`, { align: 'right' });
+      const total = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+      doc.moveDown();
+      doc.font('Helvetica-Bold').text(`Total: $${total.toFixed(2)}`, col4, doc.y, { align: 'right' });
 
+      // Finalize PDF
       doc.end();
-
-      stream.on('finish', () => {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=expenses.pdf');
-        res.download(fileName);
-      });
     } else {
-      return res.status(400).json({ error: 'Invalid format. Use "csv" or "pdf".' });
+      return res.status(400).json({ error: 'Invalid format. Use csv or pdf.' });
     }
   } catch (error) {
     console.error('Error exporting expenses:', error);
-    return res.status(500).json({ error: 'Internal Server Error' });
+    res.status(500).json({ error: 'Failed to export expenses' });
   }
 };
 
