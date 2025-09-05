@@ -3,12 +3,13 @@ info:
   title: Expense Tracker API
   description: |
     A RESTful API built with Node.js, Express, and MongoDB that allows authenticated users to manage their personal expenses. 
-    This includes creating, reading, updating, and deleting expense records, as well as filtering expenses by date range.
+    This includes creating, reading, updating, deleting, and exporting expense records, as well as filtering expenses by date range or category.
     
     **Features:**
     - User Registration & Login with JWT Authentication
-    - Create, Read, Update & Delete Expenses
-    - Filter Expenses by Custom Date Range or Past Week
+    - Create, Read, Update, Delete, and Export Expenses
+    - Filter Expenses by Custom Date Range, Past Week, Month, or Three Months
+    - Export Expenses as CSV or PDF
     - Data Validation & Error Handling
     - Protected Routes via Middleware
     - MongoDB Integration with Mongoose
@@ -51,11 +52,11 @@ components:
           example: "64f1a2b3c4d5e6f7g8h9i0j1"
         firstName:
           type: string
-          description: User's firstname
+          description: User's first name
           example: "john"
         lastName:
           type: string
-          description: User's lastname
+          description: User's last name
           example: "doe"
         email:
           type: string
@@ -86,13 +87,13 @@ components:
       properties:
         firstName:
           type: string
-          description: Desired firstname
+          description: Desired first name
           example: "john"
           minLength: 3
           maxLength: 30
         lastName:
           type: string
-          description: Desired lastname
+          description: Desired last name
           example: "doe"
           minLength: 3
           maxLength: 30
@@ -145,15 +146,15 @@ components:
           maxLength: 100
         amount:
           type: number
-          format: integer
+          format: float
           description: Expense amount
-          example: 45
+          example: 45.00
           minimum: 0
         category:
           type: string
           description: Expense category
-          example: "Groceries"
-          enum: ["Groceries", "Leisure", "Transportation", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+          example: "Food"
+          enum: ["Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
         date:
           type: string
           format: date
@@ -183,19 +184,19 @@ components:
         description:
           type: string
           description: Expense description
-          example: "Groceries"
+          example: "Grocery Shopping"
           maxLength: 100
         amount:
           type: number
-          format: integer
+          format: float
           description: Expense amount
-          example: 45
+          example: 45.00
           minimum: 0
         category:
           type: string
           description: Expense category
-          example: "Groceries"
-          enum: ["Groceries", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+          example: "Food"
+          enum: ["Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
         date:
           type: string
           format: date
@@ -212,15 +213,15 @@ components:
           maxLength: 100
         amount:
           type: number
-          format: integer
+          format: float
           description: Expense amount
-          example: 50
+          example: 50.00
           minimum: 0
         category:
           type: string
           description: Expense category
-          example: "Groceries"
-          enum: ["Groceries", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+          example: "Food"
+          enum: ["Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
         date:
           type: string
           format: date
@@ -275,9 +276,9 @@ components:
           example: 25
         totalAmount:
           type: number
-          format: integer
+          format: float
           description: Sum of all expense amounts
-          example: 1250
+          example: 1250.00
     
     SingleExpenseResponse:
       type: object
@@ -377,6 +378,9 @@ paths:
                           delete:
                             type: string
                             example: "DELETE /expense/:id"
+                          export:
+                            type: string
+                            example: "GET /expense/export"
                   author:
                     type: string
                     example: "Imade-Taye Emmanuel"
@@ -462,7 +466,7 @@ paths:
       tags:
         - Authentication
       summary: Register a new user
-      description: Create a new user account with username, email, and password
+      description: Create a new user account with first name, last name, email, and password
       requestBody:
         required: true
         content:
@@ -550,7 +554,8 @@ paths:
                     token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                     user:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      name: "john_doe"
+                      firstName: "john"
+                      lastName: "doe"
                       email: "john@example.com"
         '401':
           description: Unauthorized - invalid credentials
@@ -595,14 +600,14 @@ paths:
                     data:
                       - id: "64f1a2b3c4d5e6f7g8h9i0j1"
                         description: "Grocery Shopping"
-                        amount: 45
-                        category: "Groceries"
+                        amount: 45.00
+                        category: "Food"
                         date: "2024-01-15"
                         userId: "64f1a2b3c4d5e6f7g8h9i0j1"
                         createdAt: "2024-01-15T10:30:00.000Z"
                         updatedAt: "2024-01-15T10:30:00.000Z"
                     total: 1
-                    totalAmount: 45
+                    totalAmount: 45.00
         '401':
           description: Unauthorized - invalid or missing token
           content:
@@ -634,8 +639,8 @@ paths:
                 summary: New expense example
                 value:
                   description: "Grocery Shopping"
-                  amount: 45
-                  category: "Groceries"
+                  amount: 45.00
+                  category: "Food"
                   date: "2024-01-15"
       responses:
         '201':
@@ -653,8 +658,8 @@ paths:
                     data:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
                       description: "Grocery Shopping"
-                      amount: 45
-                      category: "Groceries"
+                      amount: 45.00
+                      category: "Food"
                       date: "2024-01-15"
                       userId: "64f1a2b3c4d5e6f7g8h9i0j1"
                       createdAt: "2024-01-15T10:30:00.000Z"
@@ -813,6 +818,118 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /expense/export:
+    get:
+      tags:
+        - Expenses
+      summary: Export expenses as CSV or PDF
+      description: Export expenses for the authenticated user as a CSV or PDF file, optionally filtered by date range or category
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          required: false
+          description: Start date for the range (YYYY-MM-DD). If omitted, all expenses are included.
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: endDate
+          in: query
+          required: false
+          description: End date for the range (YYYY-MM-DD). If omitted, all expenses are included.
+          schema:
+            type: string
+            format: date
+            example: "2024-01-31"
+        - name: category
+          in: query
+          required: false
+          description: Filter by expense category. Use 'all' or omit for no category filter.
+          schema:
+            type: string
+            enum: ["all", "Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+            example: "Food"
+        - name: format
+          in: query
+          required: false
+          description: Export format (csv or pdf). Defaults to csv.
+          schema:
+            type: string
+            enum: ["csv", "pdf"]
+            default: "csv"
+            example: "csv"
+      responses:
+        '200':
+          description: Expenses exported successfully
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+              examples:
+                csv:
+                  summary: CSV file
+                  value: |
+                    Date,Description,Category,Amount,Type
+                    2024-01-15,Grocery Shopping,Food,45.00,expense
+                    2024-01-16,Taxi Fare,Transportation,15.00,expense
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+              examples:
+                pdf:
+                  summary: PDF file
+                  value: Binary PDF content with formatted expense report
+        '400':
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_date:
+                  summary: Invalid date format
+                  value:
+                    success: false
+                    message: "Invalid date format"
+                invalid_category:
+                  summary: Invalid category
+                  value:
+                    success: false
+                    message: "Invalid category"
+                invalid_format:
+                  summary: Invalid format
+                  value:
+                    success: false
+                    message: "Invalid format. Use 'csv' or 'pdf'."
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: No expenses found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: No expenses found
+                  value:
+                    success: false
+                    message: "No expenses found for the specified filters"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /expense/{id}:
     patch:
       tags:
@@ -840,8 +957,8 @@ paths:
                 summary: Update expense example
                 value:
                   description: "Updated Grocery Shopping"
-                  amount: 50
-                  category: "Groceries"
+                  amount: 50.00
+                  category: "Food"
                   date: "2024-01-16"
       responses:
         '200':
@@ -859,8 +976,8 @@ paths:
                     data:
                       id: "64f1a2b3c4d5e6f7g8h9i0j1"
                       description: "Updated Grocery Shopping"
-                      amount: 50
-                      category: "Groceries"
+                      amount: 50.00
+                      category: "Food"
                       date: "2024-01-16"
                       userId: "64f1a2b3c4d5e6f7g8h9i0j1"
                       createdAt: "2024-01-15T10:30:00.000Z"
