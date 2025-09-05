@@ -320,6 +320,125 @@ const deleteExpense = async (req, res) => {
   }
 };
 
+const exportExpenses = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { startDate, endDate, category, format = 'csv' } = req.query;
+
+    // Build query
+    const query = { userId };
+    if (startDate && endDate) {
+      const parsedStartDate = new Date(startDate);
+      const parsedEndDate = new Date(endDate);
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+
+      if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid date format' });
+      }
+      if (parsedStartDate > parsedEndDate) {
+        return res.status(400).json({ error: 'Start date must be before or equal to end date' });
+      }
+      if (parsedEndDate > today) {
+        return res.status(400).json({ error: 'End date cannot be in the future' });
+      }
+      query.date = { $gte: parsedStartDate, $lte: parsedEndDate };
+    }
+    if (category && category !== 'all') {
+      if (!['Food', 'Transportation', 'Leisure', 'Electronics', 'Utilities', 'Clothing', 'Health', 'Education', 'Others'].includes(category)) {
+        return res.status(400).json({ error: 'Invalid category' });
+      }
+      query.category = category;
+    }
+
+    // Fetch expenses
+    const expenses = await Expense.find(query).lean();
+    if (!expenses.length) {
+      return res.status(404).json({ error: 'No expenses found for the specified filters' });
+    }
+
+    if (format === 'csv') {
+      // CSV Export
+      const csvWriter = createObjectCsvWriter({
+        path: 'expenses.csv',
+        header: [
+          { id: 'date', title: 'Date' },
+          { id: 'description', title: 'Description' },
+          { id: 'category', title: 'Category' },
+          { id: 'amount', title: 'Amount' },
+          { id: 'type', title: 'Type' },
+        ],
+      });
+
+      const records = expenses.map(expense => ({
+        date: new Date(expense.date).toISOString().split('T')[0],
+        description: expense.description,
+        category: expense.category,
+        amount: expense.amount.toFixed(2),
+        type: expense.type || 'expense',
+      }));
+
+      await csvWriter.writeRecords(records);
+
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename=expenses.csv');
+      res.download('expenses.csv');
+    } else if (format === 'pdf') {
+      // PDF Export
+      const doc = new PDFDocument();
+      const fileName = 'expenses.pdf';
+      const stream = fs.createWriteStream(fileName);
+      doc.pipe(stream);
+
+      // Header
+      doc.fontSize(16).text('Expense Report', { align: 'center' });
+      doc.fontSize(12).text(`Generated on: ${new Date().toLocaleDateString('en-US')}`, { align: 'center' });
+      if (startDate && endDate) {
+        doc.text(`Date Range: ${new Date(startDate).toLocaleDateString('en-US')} - ${new Date(endDate).toLocaleDateString('en-US')}`, { align: 'center' });
+      }
+      if (category && category !== 'all') {
+        doc.text(`Category: ${category}`, { align: 'center' });
+      }
+      doc.moveDown(2);
+
+      // Table Header
+      doc.fontSize(10).font('Helvetica-Bold');
+      doc.text('Date', 50, doc.y, { width: 100 });
+      doc.text('Description', 150, doc.y, { width: 200 });
+      doc.text('Category', 350, doc.y, { width: 100 });
+      doc.text('Amount', 450, doc.y, { width: 100, align: 'right' });
+      doc.moveDown(1);
+      doc.font('Helvetica');
+
+      // Table Rows
+      expenses.forEach(expense => {
+        doc.text(new Date(expense.date).toISOString().split('T')[0], 50, doc.y, { width: 100 });
+        doc.text(expense.description, 150, doc.y, { width: 200 });
+        doc.text(expense.category, 350, doc.y, { width: 100 });
+        doc.text(`$${expense.amount.toFixed(2)}`, 450, doc.y, { width: 100, align: 'right' });
+        doc.moveDown(0.5);
+      });
+
+      // Summary
+      const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+      doc.moveDown(2);
+      doc.font('Helvetica-Bold').text(`Total: $${totalAmount.toFixed(2)}`, { align: 'right' });
+
+      doc.end();
+
+      stream.on('finish', () => {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'attachment; filename=expenses.pdf');
+        res.download(fileName);
+      });
+    } else {
+      return res.status(400).json({ error: 'Invalid format. Use "csv" or "pdf".' });
+    }
+  } catch (error) {
+    console.error('Error exporting expenses:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+};
 export {
   addExpense,
   getExpenses,
@@ -329,4 +448,5 @@ export {
   getCustomExpenses,
   updateExpense,
   deleteExpense,
+  exportExpenses,
 };

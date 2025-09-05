@@ -9,6 +9,7 @@ import {
   getCustomExpenses,
   updateExpense,
   deleteExpense,
+  exportExpenses,
 } from "../controllers/expense.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
@@ -22,5 +23,6 @@ router.get("/three-months", authMiddleware, getThreeMonthsExpenses);
 router.get("/custom", authMiddleware, getCustomExpenses);
 router.patch("/:id", authMiddleware, updateExpense);
 router.delete("/:id", authMiddleware, deleteExpense);
+router.get("/export", authMiddleware, exportExpenses);
 
 export default router;
