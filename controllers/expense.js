@@ -327,33 +327,50 @@ const exportExpenses = async (req, res) => {
     const { startDate, endDate, category, fileFormat } = req.query;
     const userId = req.user.id;
 
-    // Set default date range (last 30 days) if not provided
-    let effectiveStartDate = startDate;
-    let effectiveEndDate = endDate;
-    if (!effectiveStartDate || !effectiveEndDate) {
+    // Handle date range - fixed logic
+    let parsedStartDate, parsedEndDate;
+
+    if (!startDate || !endDate) {
+      // Set default date range (last 30 days) if not provided
       const today = new Date();
-      effectiveEndDate = today;
+      today.setHours(23, 59, 59, 999);
+      parsedEndDate = today;
+      
       const start = new Date(today);
       start.setDate(today.getDate() - 30);
-      effectiveStartDate = start;
+      start.setHours(0, 0, 0, 0);
+      parsedStartDate = start;
+    } else {
+      // Parse provided dates
+      parsedStartDate = new Date(startDate);
+      parsedEndDate = new Date(endDate);
+      
+      // Set time bounds for proper date range matching
+      parsedStartDate.setHours(0, 0, 0, 0);
+      parsedEndDate.setHours(23, 59, 59, 999);
     }
 
-    // Validate dates
-    const parsedStartDate = new Date(effectiveStartDate);
-    const parsedEndDate = new Date(effectiveEndDate);
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-
+    // Validate parsed dates
     if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
-      return res.status(400).json({ error: 'Invalid date format' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid date format. Use YYYY-MM-DD format.' 
+      });
     }
 
     if (parsedStartDate > parsedEndDate) {
-      return res.status(400).json({ error: 'Start date must be before or equal to end date' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Start date must be before or equal to end date' 
+      });
     }
 
+    const today = new Date();
     if (parsedStartDate > today || parsedEndDate > today) {
-      return res.status(400).json({ error: 'Dates cannot be in the future' });
+      return res.status(400).json({ 
+        success: false,
+        error: 'Dates cannot be in the future' 
+      });
     }
 
     // Validate category
@@ -371,6 +388,7 @@ const exportExpenses = async (req, res) => {
     
     if (category && category !== 'all' && !validCategories.includes(category)) {
       return res.status(400).json({
+        success: false,
         error: `Invalid category. Use one of: ${validCategories.join(', ')}`,
       });
     }
@@ -382,27 +400,37 @@ const exportExpenses = async (req, res) => {
       query.category = category;
     }
 
+    // Debug logging (remove in production)
+    console.log('Query:', JSON.stringify(query, null, 2));
+    console.log('Date range:', parsedStartDate, 'to', parsedEndDate);
+
     // Fetch expenses with limit
     const expenses = await Expense.find(query).sort({ date: -1 }).limit(1000).lean();
+    
+    console.log('Found expenses:', expenses.length); // Debug log
+    
     if (!expenses.length) {
       return res.status(404).json({
         success: false,
-        error: 'No expenses found',
+        error: 'No expenses found for the specified date range and filters',
       });
     }
 
     if (fileFormat === 'csv') {
-      // CSV export
+      // CSV export with proper escaping
       const csvContent = [
         'Date,Description,Category,Amount',
         ...expenses.map(exp =>
           `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description.replace(/"/g, '""')}","${exp.category}","${exp.amount.toFixed(2)}"`
         ),
       ].join('\n');
+      
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename=expenses.csv');
       return res.send(csvContent);
-    } else if (fileFormat === 'pdf') {
+    } 
+    
+    else if (fileFormat === 'pdf') {
       // Create PDF document
       const doc = new PDFDocument({ margin: 50 });
       res.setHeader('Content-Type', 'application/pdf');
@@ -415,19 +443,20 @@ const exportExpenses = async (req, res) => {
         `Generated on: ${format(new Date(), 'MMMM dd, yyyy')}`,
         { align: 'center' }
       );
-      if (startDate && endDate) {
-        doc.text(
-          `Date Range: ${format(new Date(startDate), 'MMM dd, yyyy')} - ${format(new Date(endDate), 'MMM dd, yyyy')}`,
-          { align: 'center' }
-        );
-      }
+      
+      // Show actual date range used (not just query params)
+      doc.text(
+        `Date Range: ${format(parsedStartDate, 'MMM dd, yyyy')} - ${format(parsedEndDate, 'MMM dd, yyyy')}`,
+        { align: 'center' }
+      );
+      
       if (category && category !== 'all') {
         doc.text(`Category: ${category}`, { align: 'center' });
       }
       doc.moveDown(2);
 
       // Table setup
-      const tableTop = doc.y;
+      let tableTop = doc.y;
       const col1 = 50; // Date
       const col2 = 150; // Description
       const col3 = 300; // Category
@@ -436,31 +465,32 @@ const exportExpenses = async (req, res) => {
       const tableWidth = 500;
       const maxRowsPerPage = 25; // Pagination: rows per page
 
-      // Table headers
-      const drawTableHeaders = () => {
+      // Table headers function
+      const drawTableHeaders = (yPosition) => {
         doc.font('Helvetica-Bold').fontSize(10);
-        doc.text('Date', col1, tableTop);
-        doc.text('Description', col2, tableTop);
-        doc.text('Category', col3, tableTop);
-        doc.text('Amount', col4, tableTop, { align: 'right' });
+        doc.text('Date', col1, yPosition);
+        doc.text('Description', col2, yPosition);
+        doc.text('Category', col3, yPosition);
+        doc.text('Amount', col4, yPosition, { align: 'right' });
 
         // Header underline
-        doc.moveTo(col1, tableTop + 15)
-           .lineTo(col1 + tableWidth, tableTop + 15)
+        doc.moveTo(col1, yPosition + 15)
+           .lineTo(col1 + tableWidth, yPosition + 15)
            .stroke();
+        
+        return yPosition + rowHeight;
       };
 
-      drawTableHeaders();
+      let currentY = drawTableHeaders(tableTop);
 
       // Table rows
       doc.font('Helvetica').fontSize(10);
-      let currentY = tableTop + rowHeight;
       expenses.forEach((exp, index) => {
         // Check for page break
         if (index > 0 && index % maxRowsPerPage === 0) {
           doc.addPage();
-          currentY = 50; // Reset Y position for new page
-          drawTableHeaders(); // Redraw headers
+          tableTop = 50;
+          currentY = drawTableHeaders(tableTop);
         }
 
         // Row background (alternate colors)
@@ -492,12 +522,13 @@ const exportExpenses = async (req, res) => {
 
       // Finalize PDF
       doc.end();
-    } else {
-      return res.status(400).json({ error: 'Invalid format. Use csv or pdf.' });
     }
   } catch (error) {
     console.error('Error exporting expenses:', error);
-    res.status(500).json({ error: 'Failed to export expenses' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to export expenses' 
+    });
   }
 };
 
