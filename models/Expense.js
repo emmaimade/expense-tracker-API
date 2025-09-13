@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import User from "./User.js";
+import Category from "./Category.js";
 
 const expenseSchema = new mongoose.Schema({
   userId: {
@@ -12,19 +13,20 @@ const expenseSchema = new mongoose.Schema({
     required: true,
   },
   category: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Category",
     required: true,
-    enum: [
-      "Food",
-      "Transportation",
-      "Leisure",
-      "Electronics",
-      "Utilities",
-      "Clothing",
-      "Health",
-      "Education",
-      "Others",
-    ],
+    // enum: [
+    //   "Food",
+    //   "Transportation",
+    //   "Leisure",
+    //   "Electronics",
+    //   "Utilities",
+    //   "Clothing",
+    //   "Health",
+    //   "Education",
+    //   "Others",
+    // ],
   },
   description: {
     type: String,
