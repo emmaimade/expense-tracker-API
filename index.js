@@ -10,11 +10,9 @@ import { fileURLToPath } from "url";
 import connectDB from "./config/dbConfig.js";
 import userRoutes from "./routes/user.js";
 import expenseRoutes from "./routes/expense.js";
+import Category from "./models/Category.js";
 
 dotenv.config();
-
-// Connect to MongoDB
-connectDB();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -81,25 +79,6 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     description: "RESTful API for managing personal expenses",
     documentation: `${req.protocol}://${req.get("host")}/api-docs`,
-    endpoints: {
-      health: "/health",
-      docs: "/api-docs",
-      auth: {
-        register: "POST /user/register",
-        login: "POST /user/login",
-      },
-      expenses: {
-        all: "GET /expense",
-        weekly: "GET /expense/weekly",
-        monthly: "GET /expense/monthly",
-        three_months: "GET /expense/three-months",
-        custom: "GET /expense/custom",
-        create: "POST /expense",
-        update: "PATCH /expense/:id",
-        delete: "DELETE /expense/:id",
-      },
-    },
-    author: "Imade-Taye Emmanuel",
   });
 });
 
@@ -161,6 +140,68 @@ app.use((error, req, res, next) => {
   });
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port http://localhost:${port}`);
-});
+// ========================================
+// DEFAULT CATEGORIES SETUP
+// ========================================
+
+// Default categories
+const defaultCategories = [
+  "Food",
+  "Transportation",
+  "Leisure",
+  "Electronics",
+  "Utilities",
+  "Clothing",
+  "Health",
+  "Education",
+  "Others",
+];
+
+const createDefaultCategories = async () => {
+  try {
+    console.log('🏗️  Initializing default categories...');
+    
+    const existingDefaults = await Category.find({ userId: null, isDefault: true });
+    const existingNames = existingDefaults.map((cat) => cat.name.toLowerCase().trim());
+
+    for (const name of defaultCategories) {
+      if (!existingNames.includes(name.toLowerCase().trim())) {
+        await Category.create({
+          name,
+          userId: null,
+          isDefault: true,
+        });
+        console.log(`Created default category: ${name}`);
+      }
+    }
+  } catch (err) {
+    console.error("Error creating default categories:", err);
+  }
+};
+
+// Start server
+const startServer = async () => {
+  try {
+    console.log('🚀 Starting Expense Tracker API...');
+
+    // Connect to database
+    await connectDB();
+
+    // Initialize default categories
+    await createDefaultCategories();
+
+    console.log("Server setup complete");
+
+    app.listen(port, () => {
+      console.log(`🌟 Server running on http://localhost:${port}`);
+      console.log(`📚 API Documentation: http://localhost:${port}/api-docs`);
+      console.log(`💚 Health Check: http://localhost:${port}/health`);
+    });
+
+  } catch (err) {
+    console.error("Server startup failed:", err);
+    process.exit(1);
+  }
+};
+
+startServer();
