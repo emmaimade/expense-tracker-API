@@ -5,6 +5,8 @@ const categorySchema = new mongoose.Schema(
   {
     name: {
       type: String,
+      minlength: 2,
+      maxlength: 50,
       required: true,
       trim: true,
       unique: true,
@@ -23,8 +25,9 @@ const categorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Ensure unique category names per user, allowing multiple users to have the same category name
+// Ensure unique category names per user and for default categories
 categorySchema.index({ name: 1, userId: 1 }, { unique: true });
+categorySchema.index({ userId: 1, isDefault: 1, name: 1 });
 
 const Category = mongoose.model('Category', categorySchema);
 
