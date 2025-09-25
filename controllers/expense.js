@@ -2,75 +2,114 @@ import mongoose from "mongoose";
 import PDFDocument from 'pdfkit';
 import { format } from 'date-fns';
 import Expense from "../models/Expense.js";
+import Category from "../models/Category.js";
+
+// Reusable date range function
+// daysOrMonths: Negative for days back (e.g., -7), positive for months back (e.g., 1)
+const getDateRange = (daysOrMonths) => {
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const start = new Date(today);
+  if (daysOrMonths < 0) start.setDate(today.getDate() + daysOrMonths);
+  else start.setMonth(today.getMonth() - daysOrMonths);
+  start.setHours(0, 0, 0, 0);
+  return { start, end: today };
+};
 
 // Create a new expense
 const addExpense = async (req, res) => {
-  const { amount, category, description, date } = req.body;
+  try {
+    const { amount, category, description, date } = req.body;
 
-  if (!amount || !category || !description || !date) {
-    return res.status(400).json({ error: "Please fill all the fields" });
-  }
+    // Input validation
+    if (!amount || !category || !description || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Please fill all the fields",
+      });
+    }
 
-  if (isNaN(amount) || amount <= 0) {
-    return res.status(400).json({ error: "Amount must be a positive number" });
-  }
+    // Validate amount
+    if (isNaN(amount) || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Amount must be a positive number",
+      });
+    }
 
-  if (
-    ![
-      "Food",
-      "Transportation",
-      "Leisure",
-      "Electronics",
-      "Utilities",
-      "Clothing",
-      "Health",
-      "Education",
-      "Others",
-    ].includes(category)
-  ) {
-    return res.status(400).json({
-      error:
-        "Invalid category, use Food, Transportation, Leisure, Electronics, Utilities, Clothing, Health, Education, Others",
-    });
-  }
+    // Validate category (must be a valid ObjectId referencing an existing Category)
+    if (!mongoose.Types.ObjectId.isValid(category)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid category ID format",
+      });
+    }
+    const categoryExists = await Category.findById(category);
+    if (!categoryExists) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
 
-  // Validate date
-  if (date) {
+    // Validate date
     const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format",
+      });
+    }
     const today = new Date();
     today.setHours(23, 59, 59, 999);
-    if (isNaN(parsedDate.getTime())) {
-      return res.status(400).json({error: "Invalid date format" });
-    }
     if (parsedDate > today) {
-      return res.status(400).json({ error: "Date cannot be in the future" });
+      return res.status(400).json({
+        success: false,
+        message: "Date cannot be in the future",
+      });
     }
-  }
 
-  try {
     const expense = await Expense.create({
       userId: req.user.id,
       amount,
-      category,
+      category: categoryExists._id,
       description,
-      date: date ? new Date(date) : undefined,
+      date: parsedDate,
     });
 
-    res.status(201).json(expense);
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
+    // Populate category details
+    const populatedExpense = await Expense.findById(expense._id).populate(
+      "category",
+      "name isDefault"
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Expense created successfully",
+      data: populatedExpense,
+    });
+  } catch (err) {
+    console.error("Error adding expense:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to add expense",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
 // Get all expenses
 const getExpenses = async (req, res) => {
   try {
-    const expenses = await Expense.find({ userId: req.user.id }).sort({
-      date: -1,
-    });
+    const expenses = await Expense.find({ userId: req.user.id })
+      .sort({ date: -1 })
+      .populate("category", "name isDefault");
 
     if (expenses.length === 0) {
-      return res.status(404).json({ message: "No expenses found" });
+      return res.status(404).json({
+        success: false,
+        message: "No expenses found",
+      });
     }
 
     const totalExpenses = expenses.reduce(
@@ -79,32 +118,40 @@ const getExpenses = async (req, res) => {
     );
 
     res.status(200).json({
-      expenses,
-      totalExpenses,
+      success: true,
+      message: "Expenses retrieved successfully",
+      data: { expenses, totalExpenses },
     });
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
+  } catch (err) {
+    console.error("Error getting expenses:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get expenses",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
 // Get expenses for past week
 const getPastWeekExpenses = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const today = new Date();
-    const lastWeek = new Date();
-    lastWeek.setDate(today.getDate() - 7);
+    const { start, end } = getDateRange(-7);
 
     const expenses = await Expense.find({
-      userId,
+      userId: req.user.id,
       date: {
-        $gte: lastWeek,
-        $lte: today,
+        $gte: start,
+        $lte: end,
       },
-    }).sort({ date: -1 });
+    })
+      .sort({ date: -1 })
+      .populate("category", "name isDefault");
 
     if (expenses.length === 0) {
-      return res.status(404).json({ message: "No expenses found" });
+      return res.status(404).json({
+        success: false,
+        message: "No expenses found",
+      });
     }
 
     const totalExpenses = expenses.reduce(
@@ -113,33 +160,40 @@ const getPastWeekExpenses = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "Expenses for Past Week",
-      expenses,
-      totalExpenses,
+      success: true,
+      message: "Expenses for past week retrieved successfully",
+      data: { expenses, totalExpenses },
     });
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
+  } catch (err) {
+    console.error("Error getting past week expenses:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get past week expenses",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
 // Get expenses for past month
 const getPastMonthExpenses = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const today = new Date();
-    const lastMonth = new Date();
-    lastMonth.setMonth(today.getMonth() - 1);
+    const { start, end } = getDateRange(1);
 
     const expenses = await Expense.find({
-      userId,
+      userId: req.user.id,
       date: {
-        $gte: lastMonth,
-        $lte: today,
+        $gte: start,
+        $lte: end,
       },
-    }).sort({ date: -1 });
+    })
+      .sort({ date: -1 })
+      .populate("category", "name isDefault");
 
     if (expenses.length === 0) {
-      return res.status(404).json({ message: "No expenses found" });
+      return res.status(404).json({
+        success: false,
+        message: "No expenses found",
+      });
     }
 
     const totalExpenses = expenses.reduce(
@@ -148,33 +202,40 @@ const getPastMonthExpenses = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "Expenses for Past Month",
-      expenses,
-      totalExpenses,
+      success: true,
+      message: "Expenses for past month retrieved successfully",
+      data: { expenses, totalExpenses },
     });
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
+  } catch (err) {
+    console.error("Error getting past month expenses:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get past month expenses",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
 // Get expenses for past 3 months
 const getThreeMonthsExpenses = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const today = new Date();
-    const last_3_months = new Date();
-    last_3_months.setMonth(today.getMonth() - 3);
+    const { start, end } = getDateRange(3);
 
     const expenses = await Expense.find({
-      userId,
+      userId: req.user.id,
       date: {
-        $gte: last_3_months,
-        $lte: today,
+        $gte: start,
+        $lte: end,
       },
-    }).sort({ date: -1 });
+    })
+      .sort({ date: -1 })
+      .populate("category", "name isDefault");
 
     if (expenses.length === 0) {
-      return res.status(404).json({ message: "No expenses found" });
+      return res.status(404).json({
+        success: false,
+        message: "No expenses found",
+      });
     }
 
     const totalExpenses = expenses.reduce(
@@ -183,12 +244,17 @@ const getThreeMonthsExpenses = async (req, res) => {
     );
 
     res.status(200).json({
-      message: "Expenses for Past 3 Months",
-      expenses,
-      totalExpenses,
+      success: true,
+      message: "Expenses for past 3 months retrieved successfully",
+      data: { expenses, totalExpenses },
     });
-  } catch (error) {
-    res.status(500).json({ error: "Internal Server Error" });
+  } catch (err) {
+    console.error("Error getting past 3 months expenses:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get past 3 months expenses",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
@@ -199,36 +265,43 @@ const getCustomExpenses = async (req, res) => {
     const { startDate, endDate } = req.query;
 
     if (!startDate || !endDate) {
-      return res
-        .status(400)
-        .json({ error: "Please provide both start and end dates" });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide both start and end dates",
+      });
     }
 
-    if (
-      isNaN(new Date(startDate).getTime()) ||
-      isNaN(new Date(endDate).getTime())
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Invalid date format, use YYYY-MM-DD" });
+    const parsedStartDate = new Date(startDate);
+    const parsedEndDate = new Date(endDate);
+    if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format, use YYYY-MM-DD",
+      });
     }
 
-    if (new Date(startDate) > new Date(endDate)) {
-      return res
-        .status(400)
-        .json({ error: "Start date must be before end date" });
+    if (parsedStartDate > parsedEndDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date must be before end date",
+      });
     }
 
     const expenses = await Expense.find({
       userId,
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: parsedStartDate,
+        $lte: parsedEndDate,
       },
-    }).sort({ date: -1 });
+    })
+      .sort({ date: -1 })
+      .populate("category", "name isDefault");
 
     if (expenses.length === 0) {
-      return res.status(404).json({ message: "No expenses found" });
+      return res.status(404).json({
+        success: false,
+        message: "No expenses found",
+      });
     }
 
     const totalExpenses = expenses.reduce(
@@ -237,12 +310,17 @@ const getCustomExpenses = async (req, res) => {
     );
 
     res.status(200).json({
-      message: `Expenses between ${startDate} and ${endDate}`,
-      expenses,
-      totalExpenses,
+      success: true,
+      message: `Expenses between ${startDate} and ${endDate} retrieved successfully`,
+      data: { expenses, totalExpenses },
     });
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
+  } catch (err) {
+    console.error("Error getting custom expenses:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get custom expenses",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
@@ -252,53 +330,96 @@ const updateExpense = async (req, res) => {
     const userId = req.user.id;
     const { amount, category, description, date } = req.body;
 
-    // Checks if expense Id is valid
+    // Validate expense ID
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "Invalid expense id" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid expense ID",
+      });
     }
 
+    // Check if expense exist
     const existingExpense = await Expense.findOne({
       userId,
       _id: req.params.id,
     });
-
     if (!existingExpense) {
-      return res.status(404).json({ error: "Expense not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Expense not found",
+      });
     }
 
+    // Validate amount
     if (amount !== undefined) {
       if (isNaN(amount) || amount <= 0) {
-        return res
-          .status(404)
-          .json({ error: "Amount must be a positive number" });
+        return res.status(404).json({
+          success: false,
+          message: "Amount must be a positive number",
+        });
       }
 
       existingExpense.amount = amount;
     }
 
-    existingExpense.category = category ?? existingExpense.category;
+    // Validate category
+    if (category !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(category)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid category ID format",
+        });
+      }
+      const categoryExists = await Category.findById(category);
+      if (!categoryExists) {
+        return res.status(404).json({
+          success: false,
+          message: "Category does not exist",
+        });
+      }
+      existingExpense.category = categoryExists._id;
+    }
+
     existingExpense.description = description ?? existingExpense.description;
 
-    // Validate and update date if provided
+    // Validate date
     if (date !== undefined) {
       const parsedDate = new Date(date);
       const today = new Date();
-      today.setHours(23, 59, 59, 999); // Set to end of today
+      today.setHours(23, 59, 59, 999);
       if (isNaN(parsedDate.getTime())) {
-        return res.status(400).json({ error: "Invalid date format" });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid date format",
+        });
       }
       if (parsedDate > today) {
-        return res.status(400).json({ error: "Date cannot be in the future" });
+        return res.status(400).json({
+          success: false,
+          message: "Date cannot be in the future",
+        });
       }
       existingExpense.date = parsedDate;
     }
 
     await existingExpense.save();
-    res
-      .status(200)
-      .json({ message: "Expense updated successfully", existingExpense });
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
+    const updatedExpense = await Expense.findById(existingExpense._id).populate(
+      "category",
+      "name isDefault"
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Expense updated successfully",
+      data: updatedExpense,
+    });
+  } catch (err) {
+    console.error("Error updating expense:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update expense",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
@@ -313,18 +434,29 @@ const deleteExpense = async (req, res) => {
     });
 
     if (!expense) {
-      return res.status(404).json({ error: "Expense not found" });
+      return res.status(404).json({
+        success: false, 
+        message: "Expense not found" 
+      });
     }
 
-    res.status(200).json({ message: "Expense Deleted Successfully" });
-  } catch (error) {
-    return res.status(500).json({ error: "Internal Server Error" });
+    res.status(200).json({
+      success: true,
+      message: "Expense deleted successfully",
+    });
+  } catch (err) {
+    console.error("Error deleting expense:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete expense",
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    });
   }
 };
 
 const exportExpenses = async (req, res) => {
   try {
-    const { startDate, endDate, category, fileFormat } = req.query;
+    const { startDate, endDate, category: categoryId, fileFormat } = req.query;
     const userId = req.user.id;
 
     // Handle date range - fixed logic
@@ -332,14 +464,9 @@ const exportExpenses = async (req, res) => {
 
     if (!startDate || !endDate) {
       // Set default date range (last 30 days) if not provided
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      parsedEndDate = today;
-      
-      const start = new Date(today);
-      start.setDate(today.getDate() - 30);
-      start.setHours(0, 0, 0, 0);
+      const { start, end } = getDateRange(-30);
       parsedStartDate = start;
+      parsedEndDate = end;
     } else {
       // Parse provided dates
       parsedStartDate = new Date(startDate);
@@ -365,35 +492,34 @@ const exportExpenses = async (req, res) => {
       });
     }
 
-    // Validate category
-    const validCategories = [
-      'Food',
-      'Transportation',
-      'Leisure',
-      'Electronics',
-      'Utilities',
-      'Clothing',
-      'Health',
-      'Education',
-      'Others',
-    ];
-    
-    if (category && category !== 'all' && !validCategories.includes(category)) {
-      return res.status(400).json({
-        success: false,
-        error: `Invalid category. Use one of: ${validCategories.join(', ')}`,
-      });
-    }
-
     // Build query
-    const query = { userId };
-    query.date = { $gte: parsedStartDate, $lte: parsedEndDate };
-    if (category && category !== 'all') {
-      query.category = category;
+    const query = { userId, date: { $gte: parsedStartDate, $lte: parsedEndDate } };
+
+    // Add category filter
+    if (categoryId && categoryId !== 'all') {
+      // Validate category
+      if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid category ID format",
+        });
+      }
+      const categoryExists = await Category.findById(categoryId);
+      if (!categoryExists) {
+        return res.status(400).json({
+          success: false,
+          message: "Category does not exist",
+        });
+      }
+      query.category = categoryId;
     }
 
     // Fetch expenses with limit
-    const expenses = await Expense.find(query).sort({ date: -1 }).limit(1000).lean();
+    const expenses = await Expense.find(query)
+      .sort({ date: -1 })
+      .limit(1000)
+      .populate('category', 'name')
+      .lean();
     
     console.log('Found expenses:', expenses.length); // Debug log
     
@@ -409,7 +535,7 @@ const exportExpenses = async (req, res) => {
       const csvContent = [
         'Date,Description,Category,Amount',
         ...expenses.map(exp =>
-          `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description.replace(/"/g, '""')}","${exp.category}","${exp.amount.toFixed(2)}"`
+          `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description.replace(/"/g, '""')}","${exp.category.name}","${exp.amount.toFixed(2)}"`
         ),
       ].join('\n');
       
@@ -439,8 +565,8 @@ const exportExpenses = async (req, res) => {
         { align: 'center' }
       );
       
-      if (category && category !== 'all') {
-        doc.text(`Category: ${category}`, { align: 'center' });
+      if (categoryId && categoryId !== 'all') {
+        doc.text(`Category: ${expenses[0].category.name}`, { align: 'center' });
       }
       doc.moveDown(2);
 
@@ -502,7 +628,7 @@ const exportExpenses = async (req, res) => {
         // Row data
         doc.text(format(new Date(exp.date), 'MMM dd, yyyy'), col1, currentY + 5);
         doc.text(exp.description, col2, currentY + 5, { width: 140, ellipsis: true });
-        doc.text(exp.category, col3, currentY + 5);
+        doc.text(exp.category.name, col3, currentY + 5);
         doc.text(`$${exp.amount.toFixed(2)}`, col4, currentY + 5, { align: 'right', width: 100 });
 
         // Row separator
@@ -535,14 +661,15 @@ const exportExpenses = async (req, res) => {
     } else {
       return res.status(400).json({
         success: false,
-        error: 'Invalid file format. Use "csv" or "pdf"'
+        message: 'Invalid file format. Use "csv" or "pdf"'
       });
     }
   } catch (error) {
     console.error('Error exporting expenses:', error);
     res.status(500).json({ 
       success: false,
-      error: 'Failed to export expenses' 
+      message: 'Failed to export expenses',
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
     });
   }
 };
