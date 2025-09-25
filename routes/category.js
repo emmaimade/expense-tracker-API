@@ -10,9 +10,12 @@ import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', authMiddleware, getCategories);
-router.post('/', authMiddleware, addCategory);
-router.put('/:id', authMiddleware, updateCategory);
-router.delete('/:id', authMiddleware, deleteCategory);
+// Apply authentication middleware to all category routes
+router.use(authMiddleware);
+
+router.get('/', getCategories);
+router.post('/', addCategory);
+router.put('/:id', updateCategory);
+router.delete('/:id', deleteCategory);
 
 export default router;
