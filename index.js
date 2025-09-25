@@ -12,6 +12,7 @@ import userRoutes from "./routes/user.js";
 import expenseRoutes from "./routes/expense.js";
 import Category from "./models/Category.js";
 import categoryRoutes from "./routes/category.js";
+import budgetRoutes from "./routes/budget.js";
 
 dotenv.config();
 
@@ -107,6 +108,7 @@ app.get("/health", async (req, res) => {
 app.use("/user", userRoutes);
 app.use("/expense", expenseRoutes);
 app.use("/category", categoryRoutes);
+app.use("/budget", budgetRoutes);
 
 // ========================================
 // ERROR HANDLING MIDDLEWARE
