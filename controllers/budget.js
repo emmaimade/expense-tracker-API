@@ -168,7 +168,7 @@ const setMonthlyBudget = async (req, res) => {
         upsert: true,
         runValidators: true 
       }
-    ).populate('categoryId', 'name color');
+    ).populate('categoryId', 'name');
 
     // Get updated total monthly budget
     const totalBudgetInfo = await Budget.getTotalMonthlyBudget(userId, month, year);

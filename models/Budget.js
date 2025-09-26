@@ -36,18 +36,8 @@ const budgetSchema = new mongoose.Schema(
 budgetSchema.index({ categoryId: 1, userId: 1, month: 1, year: 1 }, { unique: true });
 budgetSchema.index({ userId: 1, month: 1, year: 1 }); // For querying all budgets of a user in a month
 
-// Static method to get budgets for the current month
-// budgetSchema.statics.getCurrentMonthBudget = function(userId) {
-//     const now = new Date();
-//     return this.find({
-//         userId: userId,
-//         month: now.getMonth() + 1,
-//         year: now.getFullYear()
-//     }).populate('categoryId', 'name');
-// }
-
 // Static method to get total budget for a user in a given month and year
-budgetSchema.statics.getTotalMontlyBudget = async function(userId, month, year) {
+budgetSchema.statics.getTotalMonthlyBudget = async function(userId, month, year) {
     const now = new Date();
     const targetMonth = month || (now.getMonth() + 1);
     const targetYear = year || (now.getFullYear());
@@ -55,7 +45,7 @@ budgetSchema.statics.getTotalMontlyBudget = async function(userId, month, year) 
     const result = await this.aggregate([
       {
         $match: {
-          userId: mongoose.Types.ObjectId(userId),
+          userId: new mongoose.Types.ObjectId(userId),
           month: targetMonth,
           year: targetYear,
         },
@@ -201,11 +191,11 @@ budgetSchema.statics.getBudgetTrends = async function(userId, monthsBack = 6) {
       month: month,
       year: year,
       monthName: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-      totalBudget: overview.totalBudget,
-      totalSpent: overview.totalSpent,
-      percentageUsed: overview.summary.percentageUsed,
-      overBudgetCount: overview.overBudgetCount,
-      categoryCount: overview.budgetCount
+      totalBudget: overview.totalBudget || 0,
+      totalSpent: overview.totalSpent || 0,
+      percentageUsed: overview.summary?.percentageUsed || 0,
+      overBudgetCount: overview.overBudgetCount || 0,
+      categoryCount: overview.budgetCount || 0
     });
   }
 
