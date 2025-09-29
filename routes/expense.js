@@ -10,7 +10,7 @@ import {
   updateExpense,
   deleteExpense,
   exportExpenses,
-} from "../controllers/expense.js";
+} from "../controllers/expenseController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();

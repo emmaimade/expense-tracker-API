@@ -7,7 +7,7 @@ import {
   setMonthlyBudget,
   getBudgetAlerts,
   deleteBudget
-} from "../controllers/budget.js";
+} from "../controllers/budgetController.js";
 import authMiddleware from '../middleware/authMiddleware.js';
 
 const router = express.Router();
