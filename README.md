@@ -18,9 +18,15 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 
 ## 🚀 Features
 
-- User Registration & Login with JWT Authentication
-- Create, Read, Update & Delete Expenses
-- Filter Expenses by Custom Date Range or Past Week
+- User Registration & Login with **JWT Authentication**
+- User Profile Retrieval, Update, and Management
+- Secure Email Change Verification (Two-Step Process)
+- Password Change Functionality (Requires Current Password)
+- **Budget Management (CRUD):** Set, track, and manage spending limits for specific periods.
+- **Category Management (CRUD):** Create, update, and delete custom expense categories.
+- **Full Expense Management (CRUD):** Create, Read, Update & Delete Expenses
+- **Advanced Expense Filtering** by Custom Date Range or Predefined Periods (Past Week, Month, 3 Months)
+- Export Expenses as CSV or PDF
 - Data Validation & Error Handling
 - Protected Routes via Middleware
 - MongoDB Integration with Mongoose
@@ -58,6 +64,9 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
    PORT=3000
    MONGODB_URI=your_db_uri
    JWT_SECRET=your_jwt_secret
+   EMAIL_USER=your_email_user
+   EMAIL_PASS=your_email_pass
+   BASE_URL=[https://expense-tracker-api-hvss.onrender.com](https://expense-tracker-api-hvss.onrender.com)
    ```
 
 4. **Start the server:**
@@ -71,10 +80,23 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 
 ### 🔐 Auth Routes
 
-| Method | Endpoint           | Description         |
-|--------|--------------------|---------------------|
-| POST   | `/user/register`   | Register a new user |
-| POST   | `/user/login`      | Login & receive JWT |
+| Method | Endpoint                | Description                                  |
+|--------|-------------------------|----------------------------------------------|
+| POST   | `/user/register`        | Register a new user                          |
+| POST   | `/user/login`           | Login & receive JWT                          |
+| POST   | `/user/forgot-password` | Request a password reset email (sends token) |
+| POST   | `/user/reset-password/` | Reset password using the sent token          |
+
+
+### 👤 User Profile & Security Routes
+
+| Method | Endpoint                            | Description                                                                  |
+|--------|-------------------------------------|------------------------------------------------------------------------------|
+| GET    | `/user/me`                          | **[Auth Required]** Get the authenticated user's profile                         |
+| PUT    | `/user/profile`                     | **[Auth Required]** Update user profile (name, optional email change initiation) |
+| PUT    | `/user/change-password`             | **[Auth Required]** Change user's password (requires current password)           |
+| GET    | `/user//verify-email-change/current`| Verify old email in the 2-step change process                                |
+| GET    | `/user/verify-email-change/new`     | Verify new email to finalize the change                                      |
 
 > ⚠️ All routes below require the token in `Authorization: Bearer <token>`
 
@@ -90,6 +112,27 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 | POST   | `/expense`               | Add a new expense                    |
 | PATCH  | `/expense/:id`           | Update an expense                    |
 | DELETE | `/expense/:id`           | Delete an expense                    |
+
+### 🏷️ Category Routes
+
+| Method | Endpoint        | Description                     |
+|--------|-----------------|---------------------------------|
+| GET    | `/category`     | Get all user-defined categories |
+| POST   | `/category`     | Create a new expense category   |
+| PUT    | `/category/:id` | Update a category by ID         |
+| DELETE | `/category/:id` | Delete a category by ID         |
+
+### 💸 Budget Routes
+
+| Method | Endpoint           | Description                     |
+|--------|--------------------|---------------------------------|
+| GET    | `/budget/overview` | Get user budgets overview       |
+| GET    | `/budget/total`    | Get total monthly budgets       |
+| GET    | `/budget/trends`   | Get user budget trends          |
+| GET    | `/budget/alerts`   | Get budget alerts for user      |
+| POST   | `/budget`          | Set & Update budget             |
+| DELETE | `/budget/:id`      | Delete a budget by ID           |
+
 
 ---
 
@@ -141,16 +184,24 @@ curl -X POST https://expense-tracker-api-hvss.onrender.com/expense \
 ├── config/
 │   └── dbConfig.js
 ├── controllers/
-│   └── user.js
-│   └── expense.js
+│   └── userController.js
+│   └── expenseControler.js
+│   └── categoryController.js
+│   └── budgetControler.js
 ├── middleware/
 │   └── authMiddleware.js
 ├── models/
 │   └── User.js
 │   └── Expense.js
+│   └── Category.js
+│   └── Budget.js
 ├── routes/
 │   └── user.js
 │   └── expense.js
+│   └── category.js
+│   └── budget.js
+├── utils/
+│   └── email.js
 ├── index.js
 ├── swagger.yaml
 ├── .env
