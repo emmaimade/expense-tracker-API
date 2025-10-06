@@ -2,27 +2,40 @@ openapi: 3.0.0
 info:
   title: Expense Tracker API
   description: |
-    A RESTful API built with Node.js, Express, and MongoDB that allows authenticated users to manage their personal expenses. 
-    This includes creating, reading, updating, deleting, and exporting expense records, as well as filtering expenses by date range or category.
-    
+    A RESTful API built with Node.js, Express, and MongoDB that allows authenticated users to manage their personal expenses, categories, budgets, and user profiles.
+
     **Features:**
     - User Registration & Login with JWT Authentication
-    - Create, Read, Update, Delete, and Export Expenses
-    - Filter Expenses by Custom Date Range, Past Week, Month, or Three Months
+    - User Profile Management (View, Update, Password Change)
+    - Password Reset with Email Verification (Forgot Password Flow)
+    - Email Change with Two-Step Verification Process
+    - Welcome Email on Registration
+    - Security Notifications for Profile Changes
+    - Create, Read, Update, Delete Expenses
+    - Filter Expenses by Date Range (Weekly, Monthly, 3 Months, Custom)
+    - Filter Expenses by Category
     - Export Expenses as CSV or PDF
+    - Create, Read, Update, Delete Categories (User-defined and Default)
+    - Create, Read, Update, Delete Monthly Budgets
+    - Budget Overview, Trends, and Alerts
     - Data Validation & Error Handling
-    - Protected Routes via Middleware
+    - Protected Routes via JWT Middleware
     - MongoDB Integration with Mongoose
-    
+
     **Authentication:**
-    All expense routes require JWT authentication. Include the token in the Authorization header:
+    All protected routes require JWT authentication. Include the token in the Authorization header:
     `Authorization: Bearer <your_token>`
-  version: 1.0.0
+
+    **Base URL:** `https://expense-tracker-api-hvss.onrender.com`
+
+    **Default Categories:** Food, Transportation, Leisure, Electronics, Utilities, Clothing, Health, Education, Others
+  version: 2.0.0
   contact:
     name: Imade-Taye Emmanuel
     email: emmaimade14@gmail.com
   license:
     name: MIT
+
 servers:
   - url: https://expense-tracker-api-hvss.onrender.com
     description: Production server
@@ -35,16 +48,11 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: JWT token for authentication
-  
+      description: JWT token obtained from login endpoint
+
   schemas:
     User:
       type: object
-      required:
-        - firstName
-        - lastName
-        - email
-        - password
       properties:
         id:
           type: string
@@ -53,30 +61,57 @@ components:
         firstName:
           type: string
           description: User's first name
-          example: "john"
+          example: "John"
         lastName:
           type: string
           description: User's last name
-          example: "doe"
+          example: "Doe"
+        fullName:
+          type: string
+          description: Computed full name (firstName + lastName)
+          example: "John Doe"
         email:
           type: string
           format: email
           description: User's email address
           example: "john@example.com"
-        password:
-          type: string
-          format: password
-          description: User's password (hashed in database)
-          example: "password123"
         createdAt:
           type: string
           format: date-time
           description: Account creation timestamp
+          example: "2025-10-06T10:30:00.000Z"
         updatedAt:
           type: string
           format: date-time
           description: Last update timestamp
-    
+          example: "2025-10-06T14:22:00.000Z"
+        emailChangeInProgress:
+          type: boolean
+          description: Whether an email change is currently pending
+          example: false
+        newEmailPending:
+          type: string
+          format: email
+          description: New email address awaiting verification
+          example: "newemail@example.com"
+        currentEmailVerified:
+          type: boolean
+          description: Whether current email has been verified in email change process
+          example: true
+        newEmailVerified:
+          type: boolean
+          description: Whether new email has been verified in email change process
+          example: false
+        expiresAt:
+          type: string
+          format: date-time
+          description: Expiration time for email change request
+          example: "2025-10-06T15:00:00.000Z"
+      description: |
+        User schema for managing user accounts. Includes fields for basic user information, password reset, and email change requests. Mongoose-specific features include:
+        - Indexes on `emailChangeRequest.currentEmailToken`, `emailChangeRequest.newEmailToken`, `emailChangeRequest.expiresAt`, and `resetPasswordToken` for performance.
+        - Methods: `hasEmailChangeInProgress()` to check if an email change is active and not expired, and `cleanupExpiredEmailChange()` to remove expired email change requests.
+
     UserRegister:
       type: object
       required:
@@ -84,31 +119,37 @@ components:
         - lastName
         - email
         - password
+        - confirmPassword
       properties:
         firstName:
           type: string
-          description: Desired first name
-          example: "john"
-          minLength: 3
-          maxLength: 30
+          description: User's first name (minimum 2 characters)
+          example: "John"
+          minLength: 2
+          maxLength: 50
         lastName:
           type: string
-          description: Desired last name
-          example: "doe"
-          minLength: 3
-          maxLength: 30
+          description: User's last name (minimum 2 characters)
+          example: "Doe"
+          minLength: 2
+          maxLength: 50
         email:
           type: string
           format: email
-          description: User's email address
+          description: User's email address (must be unique)
           example: "john@example.com"
         password:
           type: string
           format: password
-          description: User's password
-          example: "password123"
+          description: Password (min 6 chars, must contain uppercase, lowercase, number)
+          example: "Password123"
           minLength: 6
-    
+        confirmPassword:
+          type: string
+          format: password
+          description: Password confirmation (must match password)
+          example: "Password123"
+
     UserLogin:
       type: object
       required:
@@ -124,8 +165,577 @@ components:
           type: string
           format: password
           description: User's password
-          example: "password123"
-    
+          example: "Password123"
+
+    UpdateProfile:
+      type: object
+      required:
+        - currentPassword
+      properties:
+        firstName:
+          type: string
+          description: New first name (minimum 2 characters)
+          example: "Jane"
+          minLength: 2
+        lastName:
+          type: string
+          description: New last name (minimum 2 characters)
+          example: "Smith"
+          minLength: 2
+        email:
+          type: string
+          format: email
+          description: New email address (triggers two-step verification)
+          example: "newemail@example.com"
+        currentPassword:
+          type: string
+          format: password
+          description: Current password (required for security)
+          example: "Password123"
+
+    ChangePassword:
+      type: object
+      required:
+        - currentPassword
+        - newPassword
+        - confirmNewPassword
+      properties:
+        currentPassword:
+          type: string
+          format: password
+          description: Current password
+          example: "Password123"
+        newPassword:
+          type: string
+          format: password
+          description: New password (min 6 chars, must contain uppercase, lowercase, number)
+          example: "NewPassword456"
+          minLength: 6
+        confirmNewPassword:
+          type: string
+          format: password
+          description: Confirm new password (must match newPassword)
+          example: "NewPassword456"
+
+    ForgotPassword:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          description: Email address to send password reset link
+          example: "john@example.com"
+
+    ResetPassword:
+      type: object
+      required:
+        - password
+        - confirmPassword
+      properties:
+        password:
+          type: string
+          format: password
+          description: New password (min 6 chars, must contain uppercase, lowercase, number)
+          example: "NewPassword789"
+          minLength: 6
+        confirmPassword:
+          type: string
+          format: password
+          description: Confirm new password (must match password)
+          example: "NewPassword789"
+
+    Category:
+      type: object
+      required:
+        - name
+      properties:
+        id:
+          type: string
+          description: Category ID
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        name:
+          type: string
+          description: Category name
+          example: "Groceries"
+          minLength: 2
+          maxLength: 50
+        userId:
+          type: string
+          description: ID of the user who owns this category (null for default categories)
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+          nullable: true
+        isDefault:
+          type: boolean
+          description: Whether the category is a default system category
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2025-10-06T10:30:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-10-06T10:30:00.000Z"
+
+    CategoryCreate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Category name
+          example: "Groceries"
+          minLength: 2
+          maxLength: 50
+
+    CategoryUpdate:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Updated category name
+          example: "Grocery Shopping"
+          minLength: 2
+          maxLength: 50
+
+    Budget:
+      type: object
+      required:
+        - userId
+        - categoryId
+        - amount
+        - month
+        - year
+      properties:
+        id:
+          type: string
+          description: Budget ID
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        categoryId:
+          type: string
+          description: ID of the associated category
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        amount:
+          type: number
+          format: float
+          description: Budget amount
+          example: 500.00
+          minimum: 0
+        month:
+          type: integer
+          description: Month of the budget (1-12)
+          example: 10
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+          description: Year of the budget
+          example: 2025
+          minimum: 2020
+        userId:
+          type: string
+          description: ID of the user who owns this budget
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2025-10-06T10:30:00.000Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2025-10-06T10:30:00.000Z"
+
+    BudgetCreate:
+      type: object
+      required:
+        - categoryId
+        - amount
+        - month
+        - year
+      properties:
+        categoryId:
+          type: string
+          description: ID of the category to set budget for
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        amount:
+          type: number
+          format: float
+          description: Budget amount
+          example: 500.00
+          minimum: 0
+        month:
+          type: integer
+          description: Month of the budget (1-12)
+          example: 10
+          minimum: 1
+          maximum: 12
+        year:
+          type: integer
+          description: Year of the budget
+          example: 2025
+          minimum: 2020
+
+    BudgetOverview:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        totalBudget:
+          type: number
+          format: float
+          description: Total budget across all categories
+          example: 2000.00
+        totalSpent:
+          type: number
+          format: float
+          description: Total spent across all categories
+          example: 1250.50
+        totalRemaining:
+          type: number
+          format: float
+          description: Total remaining budget
+          example: 749.50
+        budgetCount:
+          type: integer
+          description: Number of budgets set
+          example: 5
+        overBudgetCount:
+          type: integer
+          description: Number of categories over budget
+          example: 1
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                description: Budget ID
+                example: "64f1a2b3c4d5e6f7g8h9i0j1"
+              category:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "64f1a2b3c4d5e6f7g8h9i0j1"
+                  name:
+                    type: string
+                    example: "Food"
+                  isDefault:
+                    type: boolean
+                    example: true
+              budget:
+                type: number
+                format: float
+                description: Budget amount
+                example: 500.00
+              spent:
+                type: number
+                format: float
+                description: Amount spent in this category
+                example: 475.00
+              remaining:
+                type: number
+                format: float
+                description: Remaining budget for this category
+                example: 25.00
+              percentageUsed:
+                type: number
+                format: float
+                description: Percentage of budget used
+                example: 95.00
+              isOverBudget:
+                type: boolean
+                description: Whether spending exceeds budget
+                example: false
+              isNearLimit:
+                type: boolean
+                description: Whether spending is near budget limit (≥80%)
+                example: true
+              expenseCount:
+                type: integer
+                description: Number of expenses in this category
+                example: 10
+        period:
+          type: object
+          properties:
+            month:
+              type: integer
+              example: 10
+            year:
+              type: integer
+              example: 2025
+        summary:
+          type: object
+          properties:
+            percentageUsed:
+              type: number
+              format: float
+              example: 62.53
+            isOverBudget:
+              type: boolean
+              example: false
+            nearLimitCategories:
+              type: integer
+              example: 2
+
+    BudgetTrends:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            trends:
+              type: array
+              items:
+                type: object
+                properties:
+                  month:
+                    type: integer
+                    description: Month number (1-12)
+                    example: 10
+                  year:
+                    type: integer
+                    description: Year
+                    example: 2025
+                  monthName:
+                    type: string
+                    description: Full month and year name
+                    example: "October 2025"
+                  totalBudget:
+                    type: number
+                    format: float
+                    description: Total budget for the month
+                    example: 2000.00
+                  totalSpent:
+                    type: number
+                    format: float
+                    description: Total spent for the month
+                    example: 1250.50
+                  percentageUsed:
+                    type: number
+                    format: float
+                    description: Percentage of budget used
+                    example: 62.53
+                  overBudgetCount:
+                    type: integer
+                    description: Number of categories over budget
+                    example: 1
+                  categoryCount:
+                    type: integer
+                    description: Number of budgeted categories
+                    example: 5
+            summary:
+              type: object
+              properties:
+                periodsAnalyzed:
+                  type: integer
+                  example: 6
+                averageMonthlyBudget:
+                  type: number
+                  format: float
+                  example: 2000.00
+                averageSpending:
+                  type: number
+                  format: float
+                  example: 1250.50
+
+    BudgetAlerts:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            overBudget:
+              type: array
+              items:
+                type: object
+                properties:
+                  category:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "64f1a2b3c4d5e6f7g8h9i0j1"
+                      name:
+                        type: string
+                        example: "Food"
+                      isDefault:
+                        type: boolean
+                        example: true
+                  budget:
+                    type: number
+                    format: float
+                    example: 500.00
+                  spent:
+                    type: number
+                    format: float
+                    example: 600.00
+                  percentageUsed:
+                    type: number
+                    format: float
+                    example: 120.00
+                  status:
+                    type: string
+                    enum: [warning, exceeded, ok]
+                    example: "exceeded"
+                  message:
+                    type: string
+                    example: "You've exceeded your Food budget by $100.00"
+            nearLimit:
+              type: array
+              items:
+                type: object
+                properties:
+                  category:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "64f1a2b3c4d5e6f7g8h9i0j2"
+                      name:
+                        type: string
+                        example: "Transportation"
+                      isDefault:
+                        type: boolean
+                        example: true
+                  budget:
+                    type: number
+                    format: float
+                    example: 200.00
+                  spent:
+                    type: number
+                    format: float
+                    example: 180.00
+                  percentageUsed:
+                    type: number
+                    format: float
+                    example: 90.00
+                  status:
+                    type: string
+                    enum: [warning, exceeded, ok]
+                    example: "warning"
+                  message:
+                    type: string
+                    example: "You've used 90% of your Transportation budget"
+            summary:
+              type: object
+              properties:
+                totalAlerts:
+                  type: integer
+                  example: 3
+                overBudgetCount:
+                  type: integer
+                  example: 1
+                nearLimitCount:
+                  type: integer
+                  example: 2
+                period:
+                  type: object
+                  properties:
+                    month:
+                      type: integer
+                      example: 10
+                    year:
+                      type: integer
+                      example: 2025
+
+    CategoryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Categories retrieved successfully"
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        counts:
+          type: object
+          properties:
+            total:
+              type: integer
+              example: 10
+            default:
+              type: integer
+              example: 9
+            custom:
+              type: integer
+              example: 1
+
+    SingleCategoryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Category created successfully"
+        data:
+          $ref: '#/components/schemas/Category'
+
+    BudgetResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Budget set successfully"
+        data:
+          type: object
+          properties:
+            budget:
+              type: object
+              properties:
+                id:
+                  type: string
+                  example: "64f1a2b3c4d5e6f7g8h9i0j1"
+                category:
+                  type: string
+                  example: "Food"
+                amount:
+                  type: number
+                  format: float
+                  example: 500.00
+                month:
+                  type: integer
+                  example: 10
+                year:
+                  type: integer
+                  example: 2025
+            monthlyTotals:
+              type: object
+              properties:
+                totalBudget:
+                  type: number
+                  format: float
+                  example: 2000.00
+                categoryCount:
+                  type: integer
+                  example: 5
+
     Expense:
       type: object
       required:
@@ -147,19 +757,22 @@ components:
         amount:
           type: number
           format: float
-          description: Expense amount
-          example: 45.00
-          minimum: 0
+          description: Expense amount (must be positive)
+          example: 45.50
+          minimum: 0.01
         category:
           type: string
-          description: Expense category
+          description: Category name (populated from Category model)
           example: "Food"
-          enum: ["Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+        categoryId:
+          type: string
+          description: ID of the associated category
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
         date:
           type: string
           format: date
-          description: Expense date
-          example: "2024-01-15"
+          description: Expense date (YYYY-MM-DD format)
+          example: "2025-10-06"
         userId:
           type: string
           description: ID of the user who owns this expense
@@ -167,18 +780,20 @@ components:
         createdAt:
           type: string
           format: date-time
-          description: Creation timestamp
+          description: Record creation timestamp
+          example: "2025-10-06T10:30:00.000Z"
         updatedAt:
           type: string
           format: date-time
           description: Last update timestamp
-    
+          example: "2025-10-06T10:30:00.000Z"
+
     ExpenseCreate:
       type: object
       required:
         - description
         - amount
-        - category
+        - categoryId
         - date
       properties:
         description:
@@ -189,45 +804,43 @@ components:
         amount:
           type: number
           format: float
-          description: Expense amount
-          example: 45.00
-          minimum: 0
-        category:
+          description: Expense amount (must be positive)
+          example: 45.50
+          minimum: 0.01
+        categoryId:
           type: string
-          description: Expense category
-          example: "Food"
-          enum: ["Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+          description: ID of the associated category
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
         date:
           type: string
           format: date
-          description: Expense date
-          example: "2024-01-15"
-    
+          description: Expense date (YYYY-MM-DD format)
+          example: "2025-10-06"
+
     ExpenseUpdate:
       type: object
       properties:
         description:
           type: string
-          description: Expense description
+          description: Updated expense description
           example: "Updated Grocery Shopping"
           maxLength: 100
         amount:
           type: number
           format: float
-          description: Expense amount
-          example: 50.00
-          minimum: 0
-        category:
+          description: Updated expense amount
+          example: 52.75
+          minimum: 0.01
+        categoryId:
           type: string
-          description: Expense category
-          example: "Food"
-          enum: ["Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
+          description: Updated category ID
+          example: "64f1a2b3c4d5e6f7g8h9i0j1"
         date:
           type: string
           format: date
-          description: Expense date
-          example: "2024-01-16"
-    
+          description: Updated expense date
+          example: "2025-10-07"
+
     AuthResponse:
       type: object
       properties:
@@ -236,10 +849,10 @@ components:
           example: true
         message:
           type: string
-          example: "User registered successfully"
+          example: "Login successful"
         token:
           type: string
-          description: JWT token for authentication
+          description: JWT authentication token
           example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         user:
           type: object
@@ -247,16 +860,32 @@ components:
             id:
               type: string
               example: "64f1a2b3c4d5e6f7g8h9i0j1"
-            firstName:
+            name:
               type: string
-              example: "john"
-            lastName:
-              type: string
-              example: "doe"
+              example: "John Doe"
             email:
               type: string
               example: "john@example.com"
-    
+
+    UserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        user:
+          $ref: '#/components/schemas/User'
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+
     ExpenseResponse:
       type: object
       properties:
@@ -267,19 +896,17 @@ components:
           type: string
           example: "Expenses retrieved successfully"
         data:
-          type: array
-          items:
-            $ref: '#/components/schemas/Expense'
-        total:
-          type: integer
-          description: Total number of expenses
-          example: 25
-        totalAmount:
-          type: number
-          format: float
-          description: Sum of all expense amounts
-          example: 1250.00
-    
+          type: object
+          properties:
+            expenses:
+              type: array
+              items:
+                $ref: '#/components/schemas/Expense'
+            totalExpenses:
+              type: number
+              format: float
+              example: 1250.75
+
     SingleExpenseResponse:
       type: object
       properties:
@@ -291,7 +918,7 @@ components:
           example: "Expense created successfully"
         data:
           $ref: '#/components/schemas/Expense'
-    
+
     ErrorResponse:
       type: object
       properties:
@@ -300,19 +927,24 @@ components:
           example: false
         message:
           type: string
-          example: "Error message"
+          example: "Error message describing what went wrong"
         error:
           type: string
-          description: Detailed error information
-          example: "Validation failed for required fields"
+          description: Detailed error information (included in development environment)
+          example: "Validation failed: Email already exists"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of the error
+          example: "2025-10-06T23:18:00.000Z"
 
 paths:
   /:
     get:
       tags:
         - General
-      summary: API Welcome
-      description: Basic API information and endpoint discovery
+      summary: API Welcome & Information
+      description: Get basic API information and documentation link
       responses:
         '200':
           description: Welcome message with API information
@@ -333,57 +965,6 @@ paths:
                   documentation:
                     type: string
                     example: "https://expense-tracker-api-hvss.onrender.com/api-docs"
-                  endpoints:
-                    type: object
-                    properties:
-                      health:
-                        type: string
-                        example: "/health"
-                      docs:
-                        type: string
-                        example: "/api-docs"
-                      auth:
-                        type: object
-                        properties:
-                          register:
-                            type: string
-                            example: "POST /user/register"
-                          login:
-                            type: string
-                            example: "POST /user/login"
-                      expenses:
-                        type: object
-                        properties:
-                          all:
-                            type: string
-                            example: "GET /expense"
-                          weekly:
-                            type: string
-                            example: "GET /expense/weekly"
-                          monthly:
-                            type: string
-                            example: "GET /expense/monthly"
-                          three_months:
-                            type: string
-                            example: "GET /expense/three-months"
-                          custom:
-                            type: string
-                            example: "GET /expense/custom"
-                          create:
-                            type: string
-                            example: "POST /expense"
-                          update:
-                            type: string
-                            example: "PATCH /expense/:id"
-                          delete:
-                            type: string
-                            example: "DELETE /expense/:id"
-                          export:
-                            type: string
-                            example: "GET /expense/export"
-                  author:
-                    type: string
-                    example: "Imade-Taye Emmanuel"
         '500':
           description: Internal server error
           content:
@@ -411,7 +992,7 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
-                    example: "2024-01-15T10:30:00.000Z"
+                    example: "2025-10-06T23:18:00.000Z"
                   uptime:
                     type: number
                     format: float
@@ -422,18 +1003,9 @@ paths:
                     example: "connected"
                   environment:
                     type: string
-                    example: "production"
-              examples:
-                healthy:
-                  summary: Healthy API response
-                  value:
-                    status: "OK"
-                    timestamp: "2024-01-15T10:30:00.000Z"
-                    uptime: 3600.123
-                    database: "connected"
-                    environment: "production"
+                    example: "development"
         '503':
-          description: API is unhealthy or experiencing issues
+          description: Service unavailable - API or database issues
           content:
             application/json:
               schema:
@@ -445,28 +1017,71 @@ paths:
                   timestamp:
                     type: string
                     format: date-time
-                    example: "2024-01-15T10:30:00.000Z"
+                    example: "2025-10-06T23:18:00.000Z"
                   database:
                     type: string
                     example: "disconnected"
                   error:
                     type: string
                     example: "Database connection failed"
-              examples:
-                unhealthy:
-                  summary: Unhealthy API response
-                  value:
-                    status: "ERROR"
-                    timestamp: "2024-01-15T10:30:00.000Z"
-                    database: "disconnected"
-                    error: "Database connection failed"
+
+  /swagger.json:
+    get:
+      tags:
+        - General
+      summary: Get Swagger JSON specification
+      description: Retrieve the Swagger/OpenAPI specification in JSON format
+      responses:
+        '200':
+          description: Swagger JSON specification
+          content:
+            application/json:
+              schema:
+                type: object
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api-docs:
+    get:
+      tags:
+        - General
+      summary: Swagger UI Documentation
+      description: Access the interactive Swagger UI for API documentation
+      responses:
+        '200':
+          description: Swagger UI interface
+          content:
+            text/html:
+              schema:
+                type: string
+                description: HTML content for Swagger UI
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /user/register:
     post:
       tags:
         - Authentication
       summary: Register a new user
-      description: Create a new user account with first name, last name, email, and password
+      description: |
+        Create a new user account with email and password.
+
+        **Password Requirements:**
+        - Minimum 6 characters
+        - At least one uppercase letter
+        - At least one lowercase letter
+        - At least one number
+
+        **Email Notification:**
+        A welcome email will be sent to the registered email.
       requestBody:
         required: true
         content:
@@ -474,13 +1089,14 @@ paths:
             schema:
               $ref: '#/components/schemas/UserRegister'
             examples:
-              user_registration:
-                summary: User registration example
+              valid_registration:
+                summary: Valid registration
                 value:
-                  firstName: "john"
-                  lastName: "doe"
+                  firstName: "John"
+                  lastName: "Doe"
                   email: "john@example.com"
-                  password: "password123"
+                  password: "Password123"
+                  confirmPassword: "Password123"
       responses:
         '201':
           description: User registered successfully
@@ -488,18 +1104,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
-              examples:
-                success:
-                  summary: Successful registration
-                  value:
-                    success: true
-                    message: "User registered successfully"
-                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    user:
-                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      firstName: "john"
-                      lastName: "doe"
-                      email: "john@example.com"
         '400':
           description: Bad request - validation error
           content:
@@ -507,12 +1111,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                validation_error:
-                  summary: Validation error
+                missing_fields:
+                  summary: Missing required fields
                   value:
                     success: false
-                    message: "Validation failed"
-                    error: "Email already exists"
+                    message: "Please fill all the fields"
+                email_exists:
+                  summary: Email already exists
+                  value:
+                    success: false
+                    message: "User already exists"
+                password_mismatch:
+                  summary: Passwords don't match
+                  value:
+                    success: false
+                    message: "Passwords do not match"
+                weak_password:
+                  summary: Password doesn't meet requirements
+                  value:
+                    success: false
+                    message: "Password must contain at least one lowercase letter, one uppercase letter, and one number"
         '500':
           description: Internal server error
           content:
@@ -525,7 +1143,7 @@ paths:
       tags:
         - Authentication
       summary: User login
-      description: Authenticate user and receive JWT token
+      description: Authenticate user with email and password to receive JWT token
       requestBody:
         required: true
         content:
@@ -533,11 +1151,11 @@ paths:
             schema:
               $ref: '#/components/schemas/UserLogin'
             examples:
-              user_login:
-                summary: User login example
+              valid_login:
+                summary: Valid login credentials
                 value:
                   email: "john@example.com"
-                  password: "password123"
+                  password: "Password123"
       responses:
         '200':
           description: Login successful
@@ -545,18 +1163,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Bad request - missing credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
               examples:
-                success:
-                  summary: Successful login
+                missing_credentials:
                   value:
-                    success: true
-                    message: "Login successful"
-                    token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    user:
-                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      firstName: "john"
-                      lastName: "doe"
-                      email: "john@example.com"
+                    success: false
+                    message: "Email and Password is required"
         '401':
           description: Unauthorized - invalid credentials
           content:
@@ -564,11 +1181,450 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                invalid_credentials:
-                  summary: Invalid credentials
+                invalid:
                   value:
                     success: false
-                    message: "Invalid email or password"
+                    message: "Invalid credentials"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/me:
+    get:
+      tags:
+        - User Profile
+      summary: Get current user profile
+      description: |
+        Retrieve the authenticated user's complete profile information.
+
+        **Includes:**
+        - Basic profile data (name, email)
+        - Account timestamps
+        - Email change status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/profile:
+    put:
+      tags:
+        - User Profile
+      summary: Update user profile
+      description: |
+        Update user profile information. Current password is required.
+
+        **Email Change Process (Two-Step Verification):**
+        1. Request email change → Verification sent to CURRENT email
+        2. Verify current email → Verification sent to NEW email
+        3. Verify new email → Email change complete
+
+        **Notifications:**
+        - Profile updates send confirmation email
+        - Email changes trigger verification emails
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfile'
+            examples:
+              update_name:
+                summary: Update name only
+                value:
+                  firstName: "Jane"
+                  lastName: "Smith"
+                  currentPassword: "Password123"
+              update_email:
+                summary: Initiate email change
+                value:
+                  email: "newemail@example.com"
+                  currentPassword: "Password123"
+              update_all:
+                summary: Update multiple fields
+                value:
+                  firstName: "Jane"
+                  lastName: "Smith"
+                  email: "newemail@example.com"
+                  currentPassword: "Password123"
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile updated successfully"
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Bad request - validation error or no changes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                no_password:
+                  summary: Missing current password
+                  value:
+                    success: false
+                    message: "Current password is required to update profile"
+                invalid_name:
+                  summary: Name too short
+                  value:
+                    success: false
+                    message: "First name must be at least 2 characters long"
+                email_taken:
+                  summary: Email already in use
+                  value:
+                    success: false
+                    message: "Email already in use"
+                no_changes:
+                  summary: No changes detected
+                  value:
+                    success: false
+                    message: "No changes detected"
+        '401':
+          description: Unauthorized - invalid token or wrong password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                wrong_password:
+                  value:
+                    success: false
+                    message: "Current password is incorrect"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/change-password:
+    put:
+      tags:
+        - User Profile
+      summary: Change password (when logged in)
+      description: |
+        Change user password while logged in.
+
+        **Requirements:**
+        - Current password for verification
+        - New password must meet strength requirements
+        - New password must differ from current
+
+        **Email Notification:**
+        Confirmation email sent after successful change.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePassword'
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  summary: Missing required fields
+                  value:
+                    success: false
+                    message: "All fields are required"
+                password_mismatch:
+                  summary: New passwords don't match
+                  value:
+                    success: false
+                    message: "New passwords do not match"
+                same_password:
+                  summary: New password same as current
+                  value:
+                    success: false
+                    message: "New password must be different from current password"
+                weak_password:
+                  summary: Password too weak
+                  value:
+                    success: false
+                    message: "Password must contain at least one lowercase letter, one uppercase letter, and one number"
+        '401':
+          description: Unauthorized - invalid token or wrong password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/forgot-password:
+    post:
+      tags:
+        - Password Reset
+      summary: Request password reset
+      description: |
+        Send a password reset link to the user's email.
+
+        **Security Features:**
+        - Reset link expires in 15 minutes
+        - Generic response (doesn't reveal if email exists)
+        - One-time use token
+
+        **Email Notification:**
+        Password reset email with secure link sent.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPassword'
+      responses:
+        '200':
+          description: Password reset email sent (or email doesn't exist)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - email is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_email:
+                  value:
+                    success: false
+                    message: "Email is required"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/reset-password:
+    post:
+      tags:
+        - Password Reset
+      summary: Reset password with token
+      description: |
+        Reset password using the token received via email.
+
+        **Token Requirements:**
+        - Valid and not expired (15-minute window)
+        - Single-use only
+        - Sent via query parameter
+
+        **Email Notification:**
+        Confirmation email sent after successful reset.
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Password reset token from email
+          schema:
+            type: string
+            example: "a7b3c9d2e4f5g6h7i8j9k0l1m2n3o4p5"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPassword'
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - invalid/expired token or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                expired_token:
+                  summary: Token expired
+                  value:
+                    success: false
+                    message: "Password reset link is invalid or has expired. Please request a new one."
+                passwords_mismatch:
+                  summary: Passwords don't match
+                  value:
+                    success: false
+                    message: "Passwords do not match"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/verify-email-change/current:
+    get:
+      tags:
+        - Email Verification
+      summary: Verify current email (Step 1 of 2)
+      description: |
+        First step of email change process. Verifies user owns current email.
+
+        **What happens:**
+        1. User clicks link in email sent to CURRENT address
+        2. Token is verified
+        3. Email sent to NEW address with Step 2 link
+
+        **Token:** 30-minute expiration
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Verification token from email
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current email verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalid_token:
+                  value:
+                    success: false
+                    message: "Invalid or expired verification token"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/verify-email-change/new:
+    get:
+      tags:
+        - Email Verification
+      summary: Verify new email (Step 2 of 2)
+      description: |
+        Final step of email change process. Completes the email change.
+
+        **Requirements:**
+        - Current email must be verified first (Step 1)
+        - Token must be valid and not expired
+
+        **What happens:**
+        1. User clicks link in email sent to NEW address
+        2. Token is verified
+        3. Email is updated in database
+        4. Confirmation emails sent to both addresses
+        5. User must log in with NEW email
+
+        **Token:** 30-minute expiration
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Verification token from email
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Email changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Email successfully changed! Please log in with your new email address."
+                  newEmail:
+                    type: string
+                    example: "newemail@example.com"
+        '400':
+          description: Bad request - invalid token or current email not verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_verified:
+                  summary: Current email not verified yet
+                  value:
+                    success: false
+                    message: "Invalid verification token, or current email not verified yet"
+                expired:
+                  summary: Token expired
+                  value:
+                    success: false
+                    message: "Invalid or expired verification token"
         '500':
           description: Internal server error
           content:
@@ -581,7 +1637,13 @@ paths:
       tags:
         - Expenses
       summary: Get all expenses
-      description: Retrieve all expenses for the authenticated user
+      description: |
+        Retrieve all expenses for the authenticated user.
+
+        **Returns:**
+        - Array of expense records
+        - Total count of expenses
+        - Total amount sum
       security:
         - bearerAuth: []
       responses:
@@ -591,23 +1653,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ExpenseResponse'
-              examples:
-                success:
-                  summary: Successful retrieval
-                  value:
-                    success: true
-                    message: "Expenses retrieved successfully"
-                    data:
-                      - id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                        description: "Grocery Shopping"
-                        amount: 45.00
-                        category: "Food"
-                        date: "2024-01-15"
-                        userId: "64f1a2b3c4d5e6f7g8h9i0j1"
-                        createdAt: "2024-01-15T10:30:00.000Z"
-                        updatedAt: "2024-01-15T10:30:00.000Z"
-                    total: 1
-                    totalAmount: 45.00
         '401':
           description: Unauthorized - invalid or missing token
           content:
@@ -620,12 +1665,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-    
+
     post:
       tags:
         - Expenses
       summary: Add a new expense
-      description: Create a new expense record
+      description: Create a new expense record for the authenticated user
       security:
         - bearerAuth: []
       requestBody:
@@ -635,13 +1680,20 @@ paths:
             schema:
               $ref: '#/components/schemas/ExpenseCreate'
             examples:
-              new_expense:
-                summary: New expense example
+              food_expense:
+                summary: Food expense
                 value:
                   description: "Grocery Shopping"
-                  amount: 45.00
-                  category: "Food"
-                  date: "2024-01-15"
+                  amount: 45.50
+                  categoryId: "64f1a2b3c4d5e6f7g8h9i0j1"
+                  date: "2025-10-06"
+              transport_expense:
+                summary: Transportation expense
+                value:
+                  description: "Taxi Fare"
+                  amount: 15.00
+                  categoryId: "64f1a2b3c4d5e6f7g8h9i0j2"
+                  date: "2025-10-07"
       responses:
         '201':
           description: Expense created successfully
@@ -649,29 +1701,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SingleExpenseResponse'
-              examples:
-                success:
-                  summary: Successful creation
-                  value:
-                    success: true
-                    message: "Expense created successfully"
-                    data:
-                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      description: "Grocery Shopping"
-                      amount: 45.00
-                      category: "Food"
-                      date: "2024-01-15"
-                      userId: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      createdAt: "2024-01-15T10:30:00.000Z"
-                      updatedAt: "2024-01-15T10:30:00.000Z"
         '400':
           description: Bad request - validation error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  summary: Missing required fields
+                  value:
+                    success: false
+                    message: "Please fill all the fields"
+                invalid_amount:
+                  summary: Invalid amount
+                  value:
+                    success: false
+                    message: "Amount must be a positive number"
+                invalid_category:
+                  summary: Invalid category
+                  value:
+                    success: false
+                    message: "Invalid category ID format"
+                future_date:
+                  summary: Future date
+                  value:
+                    success: false
+                    message: "Date cannot be in the future"
         '401':
           description: Unauthorized - invalid or missing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Category not found
           content:
             application/json:
               schema:
@@ -699,7 +1763,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExpenseResponse'
         '401':
-          description: Unauthorized - invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -715,8 +1779,8 @@ paths:
     get:
       tags:
         - Expenses
-      summary: Get expenses for the past month
-      description: Retrieve expenses from the last 30 days for the authenticated user
+      summary: Get expenses for the past 30 days
+      description: Retrieve expenses from the last month for the authenticated user
       security:
         - bearerAuth: []
       responses:
@@ -727,7 +1791,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExpenseResponse'
         '401':
-          description: Unauthorized - invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -743,8 +1807,8 @@ paths:
     get:
       tags:
         - Expenses
-      summary: Get expenses for the last 3 months
-      description: Retrieve expenses from the last 90 days for the authenticated user
+      summary: Get expenses for the last 90 days
+      description: Retrieve expenses from the last 3 months for the authenticated user
       security:
         - bearerAuth: []
       responses:
@@ -755,7 +1819,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExpenseResponse'
         '401':
-          description: Unauthorized - invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -772,7 +1836,12 @@ paths:
       tags:
         - Expenses
       summary: Get expenses within a custom date range
-      description: Retrieve expenses between specified start and end dates
+      description: |
+        Retrieve expenses between specified start and end dates.
+
+        **Date Format:** YYYY-MM-DD
+
+        **Example:** `?startDate=2025-10-01&endDate=2025-10-31`
       security:
         - bearerAuth: []
       parameters:
@@ -783,7 +1852,7 @@ paths:
           schema:
             type: string
             format: date
-            example: "2024-01-01"
+            example: "2025-10-01"
         - name: endDate
           in: query
           required: true
@@ -791,7 +1860,14 @@ paths:
           schema:
             type: string
             format: date
-            example: "2024-01-31"
+            example: "2025-10-31"
+        - name: categoryId
+          in: query
+          required: false
+          description: Filter by category ID
+          schema:
+            type: string
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
       responses:
         '200':
           description: Custom range expenses retrieved successfully
@@ -800,13 +1876,29 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExpenseResponse'
         '400':
-          description: Bad request - invalid date parameters
+          description: Bad request - invalid date or category parameters
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_dates:
+                  summary: Missing date parameters
+                  value:
+                    success: false
+                    message: "Start date and end date are required"
+                invalid_format:
+                  summary: Invalid date format
+                  value:
+                    success: false
+                    message: "Invalid date format. Use YYYY-MM-DD"
+                invalid_category:
+                  summary: Invalid category ID
+                  value:
+                    success: false
+                    message: "Invalid category ID"
         '401':
-          description: Unauthorized - invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -823,42 +1915,54 @@ paths:
       tags:
         - Expenses
       summary: Export expenses as CSV or PDF
-      description: Export expenses for the authenticated user as a CSV or PDF file, optionally filtered by date range or category
+      description: |
+        Export user expenses as a downloadable CSV or PDF file.
+
+        **Optional Filters:**
+        - Date range (startDate, endDate)
+        - Category filter (by category ID)
+
+        **Formats:**
+        - CSV: Comma-separated values file
+        - PDF: Formatted PDF document with expense report
+
+        **Default:** CSV format, all expenses
       security:
         - bearerAuth: []
       parameters:
         - name: startDate
           in: query
           required: false
-          description: Start date for the range (YYYY-MM-DD). If omitted, all expenses are included.
+          description: Start date for filtering (YYYY-MM-DD)
           schema:
             type: string
             format: date
-            example: "2024-01-01"
+            example: "2025-10-01"
         - name: endDate
           in: query
           required: false
-          description: End date for the range (YYYY-MM-DD). If omitted, all expenses are included.
+          description: End date for filtering (YYYY-MM-DD)
           schema:
             type: string
             format: date
-            example: "2024-01-31"
-        - name: category
+            example: "2025-10-31"
+        - name: categoryId
           in: query
           required: false
-          description: Filter by expense category. Use 'all' or omit for no category filter.
+          description: Filter by category ID (or 'all')
           schema:
             type: string
-            enum: ["all", "Food", "Transportation", "Leisure", "Electronics", "Utilities", "Clothing", "Health", "Education", "Others"]
-            example: "Food"
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
         - name: format
           in: query
           required: false
           description: Export format (csv or pdf). Defaults to csv.
           schema:
             type: string
-            enum: ["csv", "pdf"]
-            default: "csv"
+            enum:
+              - csv
+              - pdf
+            default: csv
             example: "csv"
       responses:
         '200':
@@ -869,20 +1973,16 @@ paths:
                 type: string
                 format: binary
               examples:
-                csv:
-                  summary: CSV file
+                csv_example:
+                  summary: CSV file content
                   value: |
-                    Date,Description,Category,Amount,Type
-                    2024-01-15,Grocery Shopping,Food,45.00,expense
-                    2024-01-16,Taxi Fare,Transportation,15.00,expense
+                    Date,Description,Category,Amount
+                    2025-10-06,Grocery Shopping,Food,45.50
+                    2025-10-07,Taxi Fare,Transportation,15.00
             application/pdf:
               schema:
                 type: string
                 format: binary
-              examples:
-                pdf:
-                  summary: PDF file
-                  value: Binary PDF content with formatted expense report
         '400':
           description: Bad request - invalid parameters
           content:
@@ -890,23 +1990,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
+                invalid_format:
+                  summary: Invalid format parameter
+                  value:
+                    success: false
+                    message: "Invalid format. Use 'csv' or 'pdf'."
+                invalid_category:
+                  summary: Invalid category ID
+                  value:
+                    success: false
+                    message: "Invalid category ID"
                 invalid_date:
                   summary: Invalid date format
                   value:
                     success: false
-                    message: "Invalid date format"
-                invalid_category:
-                  summary: Invalid category
-                  value:
-                    success: false
-                    message: "Invalid category"
-                invalid_format:
-                  summary: Invalid format
-                  value:
-                    success: false
-                    message: "Invalid format. Use 'csv' or 'pdf'."
+                    message: "Invalid date format. Use YYYY-MM-DD"
         '401':
-          description: Unauthorized - invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -919,7 +2019,6 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
                 not_found:
-                  summary: No expenses found
                   value:
                     success: false
                     message: "No expenses found for the specified filters"
@@ -935,14 +2034,17 @@ paths:
       tags:
         - Expenses
       summary: Update an expense
-      description: Update an existing expense record
+      description: |
+        Update an existing expense record. Only the expense owner can update it.
+
+        **Note:** All fields are optional - only send fields to update.
       security:
         - bearerAuth: []
       parameters:
         - name: id
           in: path
           required: true
-          description: Expense ID
+          description: Expense ID to update
           schema:
             type: string
             example: "64f1a2b3c4d5e6f7g8h9i0j1"
@@ -953,13 +2055,17 @@ paths:
             schema:
               $ref: '#/components/schemas/ExpenseUpdate'
             examples:
-              update_expense:
-                summary: Update expense example
+              update_amount:
+                summary: Update amount only
+                value:
+                  amount: 52.75
+              update_multiple:
+                summary: Update multiple fields
                 value:
                   description: "Updated Grocery Shopping"
-                  amount: 50.00
-                  category: "Food"
-                  date: "2024-01-16"
+                  amount: 52.75
+                  categoryId: "64f1a2b3c4d5e6f7g8h9i0j1"
+                  date: "2025-10-07"
       responses:
         '200':
           description: Expense updated successfully
@@ -967,21 +2073,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SingleExpenseResponse'
-              examples:
-                success:
-                  summary: Successful update
-                  value:
-                    success: true
-                    message: "Expense updated successfully"
-                    data:
-                      id: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      description: "Updated Grocery Shopping"
-                      amount: 50.00
-                      category: "Food"
-                      date: "2024-01-16"
-                      userId: "64f1a2b3c4d5e6f7g8h9i0j1"
-                      createdAt: "2024-01-15T10:30:00.000Z"
-                      updatedAt: "2024-01-16T09:15:00.000Z"
         '400':
           description: Bad request - validation error
           content:
@@ -989,74 +2080,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
-          description: Unauthorized - invalid or missing token
+          description: Unauthorized
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
-          description: Expense not found
+          description: Expense not found or not owned by user
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
                 not_found:
-                  summary: Expense not found
-                  value:
-                    success: false
-                    message: "Expense not found"
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    
-    delete:
-      tags:
-        - Expenses
-      summary: Delete an expense
-      description: Delete an existing expense record
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Expense ID
-          schema:
-            type: string
-            example: "64f1a2b3c4d5e6f7g8h9i0j1"
-      responses:
-        '200':
-          description: Expense deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Expense deleted successfully"
-        '401':
-          description: Unauthorized - invalid or missing token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Expense not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                not_found:
-                  summary: Expense not found
                   value:
                     success: false
                     message: "Expense not found"
@@ -1067,10 +2103,622 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+    delete:
+      tags:
+        - Expenses
+      summary: Delete an expense
+      description: |
+        Delete an existing expense record. Only the expense owner can delete it.
+
+        **Warning:** This action cannot be undone.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Expense ID to delete
+          schema:
+            type: string
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
+      responses:
+        '200':
+          description: Expense deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Expense not found or not owned by user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  value:
+                    success: false
+                    message: "Expense not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /category:
+    get:
+      tags:
+        - Categories
+      summary: Get all categories
+      description: Retrieve all categories (user-defined and default) for the authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Categories
+      summary: Create a new category
+      description: Create a new user-defined category
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryCreate'
+            examples:
+              new_category:
+                summary: New category example
+                value:
+                  name: "Groceries"
+      responses:
+        '201':
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleCategoryResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_name:
+                  summary: Missing name
+                  value:
+                    success: false
+                    message: "Category name is required"
+                invalid_length:
+                  summary: Invalid name length
+                  value:
+                    success: false
+                    message: "Category name must be between 2 and 50 characters"
+        '409':
+          description: Conflict - category name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate:
+                  summary: Duplicate name
+                  value:
+                    success: false
+                    message: "Category already exists"
+                default_conflict:
+                  summary: Matches default category
+                  value:
+                    success: false
+                    message: "Cannot create a category that matches a default category"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /category/{id}:
+    put:
+      tags:
+        - Categories
+      summary: Update a category
+      description: Update an existing user-defined category
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Category ID to update
+          schema:
+            type: string
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryUpdate'
+      responses:
+        '200':
+          description: Category updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SingleCategoryResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_name:
+                  summary: Missing name
+                  value:
+                    success: false
+                    message: "Category name is required"
+                invalid_length:
+                  summary: Invalid name length
+                  value:
+                    success: false
+                    message: "Category name must be between 2 and 50 characters"
+        '404':
+          description: Category not found or cannot be updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                not_found:
+                  summary: Category not found
+                  value:
+                    success: false
+                    message: "Category not found or cannot be updated"
+        '409':
+          description: Conflict - name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                duplicate:
+                  summary: Duplicate name
+                  value:
+                    success: false
+                    message: "Category name 'Groceries' already exists as a custom category"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Categories
+      summary: Delete a category
+      description: |
+        Delete a user-defined category. If the category has expenses, require force=true to move them to "Others" category.
+
+        **Warning:** This action cannot be undone.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Category ID to delete
+          schema:
+            type: string
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
+        - name: force
+          in: query
+          required: false
+          description: Force delete and move expenses to "Others" category
+          schema:
+            type: boolean
+            example: true
+      responses:
+        '200':
+          description: Category deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Bad request - cannot delete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                cannot_delete:
+                  summary: Cannot delete
+                  value:
+                    success: false
+                    message: "Cannot delete this category"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict - category has expenses
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                has_expenses:
+                  summary: Category has expenses
+                  value:
+                    success: false
+                    message: "Category is used by 5 expenses"
+                    options:
+                      forceDelete: "DELETE /category/64f1a2b3c4d5e6f7g8h9i0j1?force=true"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /budget/overview:
+    get:
+      tags:
+        - Budgets
+      summary: Get budget overview
+      description: Retrieve an overview of all budgets with spending data for a specific month/year
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Month to query (1-12, defaults to current month)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 10
+        - name: year
+          in: query
+          required: false
+          description: Year to query (defaults to current year)
+          schema:
+            type: integer
+            minimum: 2020
+            example: 2025
+      responses:
+        '200':
+          description: Budget overview retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetOverview'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /budget/total:
+    get:
+      tags:
+        - Budgets
+      summary: Get total monthly budget
+      description: Retrieve the total budget and category count for a specific month/year
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Month to query (1-12, defaults to current month)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 10
+        - name: year
+          in: query
+          required: false
+          description: Year to query (defaults to current year)
+          schema:
+            type: integer
+            minimum: 2020
+            example: 2025
+      responses:
+        '200':
+          description: Total monthly budget retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /budget/trends:
+    get:
+      tags:
+        - Budgets
+      summary: Get budget trends
+      description: Retrieve budget trends over a specified period (default: last 6 months)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: months
+          in: query
+          required: false
+          description: Number of months to analyze (default: 6)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 6
+      responses:
+        '200':
+          description: Budget trends retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetTrends'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /budget/alerts:
+    get:
+      tags:
+        - Budgets
+      summary: Get budget alerts
+      description: Retrieve alerts for categories near or over budget for a specific month/year
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: false
+          description: Month to query (1-12, defaults to current month)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+            example: 10
+        - name: year
+          in: query
+          required: false
+          description: Year to query (defaults to current year)
+          schema:
+            type: integer
+            minimum: 2020
+            example: 2025
+      responses:
+        '200':
+          description: Budget alerts retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetAlerts'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /budget:
+    post:
+      tags:
+        - Budgets
+      summary: Create or update a budget
+      description: Create or update a monthly budget for a category
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BudgetCreate'
+            examples:
+              new_budget:
+                summary: New budget example
+                value:
+                  categoryId: "64f1a2b3c4d5e6f7g8h9i0j1"
+                  amount: 500.00
+                  month: 10
+                  year: 2025
+      responses:
+        '201':
+          description: Budget set successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BudgetResponse'
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_fields:
+                  summary: Missing fields
+                  value:
+                    success: false
+                    message: "Category, amount, month, and year are required"
+                invalid_amount:
+                  summary: Invalid amount
+                  value:
+                    success: false
+                    message: "Budget amount must be greater than 0"
+                invalid_month:
+                  summary: Invalid month
+                  value:
+                    success: false
+                    message: "Month must be between 1 and 12"
+                invalid_year:
+                  summary: Invalid year
+                  value:
+                    success: false
+                    message: "Year must be between 2020 and 2030"
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Category not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /budget/{id}:
+    delete:
+      tags:
+        - Budgets
+      summary: Delete a budget
+      description: Delete an existing budget for the authenticated user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Budget ID to delete
+          schema:
+            type: string
+            example: "64f1a2b3c4d5e6f7g8h9i0j1"
+      responses:
+        '200':
+          description: Budget deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Budget not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 tags:
   - name: General
-    description: General API endpoints (welcome, health check)
+    description: General API endpoints (welcome, health check, documentation)
   - name: Authentication
     description: User registration and login endpoints
+  - name: User Profile
+    description: User profile management endpoints (requires authentication)
+  - name: Password Reset
+    description: Password reset flow via email verification
+  - name: Email Verification
+    description: Two-step email change verification process
   - name: Expenses
     description: Expense management endpoints (requires authentication)
+  - name: Categories
+    description: Category management endpoints (requires authentication)
+  - name: Budgets
+    description: Budget management endpoints (requires authentication)
