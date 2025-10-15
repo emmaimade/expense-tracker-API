@@ -273,6 +273,7 @@ const getCustomExpenses = async (req, res) => {
 
     const parsedStartDate = new Date(startDate);
     const parsedEndDate = new Date(endDate);
+    parsedEndDate.setHours(23, 59, 59, 999);
     if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
       return res.status(400).json({
         success: false,
