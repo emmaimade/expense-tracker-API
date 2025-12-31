@@ -1,5 +1,7 @@
 import Budget from '../models/Budget.js';
 import Category from '../models/Category.js';
+import User from '../models/User.js';
+import { getCurrencySymbol } from '../utils/currency.js';
 
 // GET: Budget overview with totals and spending
 const getBudgetOverview = async (req, res) => {
@@ -13,18 +15,20 @@ const getBudgetOverview = async (req, res) => {
       year ? parseInt(year) : undefined
     );
 
+    const user = await User.findById(userId).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
-      message: "Budget overview retrieved successfully",
-      data: overview
+      message: 'Budget overview retrieved successfully',
+      data: { ...overview, currency, currencySymbol: getCurrencySymbol(currency) }
     });
-
   } catch (error) {
     console.error('Error getting budget overview:', error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve budget overview",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined
+      message: 'Failed to retrieve budget overview',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -45,29 +49,33 @@ const getTotalMonthlyBudget = async (req, res) => {
     const targetMonth = month ? parseInt(month) : (now.getMonth() + 1);
     const targetYear = year ? parseInt(year) : now.getFullYear();
 
+    const user = await User.findById(userId).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
-      message: "Total monthly budget retrieved successfully",
+      message: 'Total monthly budget retrieved successfully',
       data: {
         totalBudget: budgetTotal.totalBudget,
         categoryCount: budgetTotal.categoryCount,
+        currency,
+        currencySymbol: getCurrencySymbol(currency),
         period: {
           month: targetMonth,
           year: targetYear,
-          monthName: new Date(targetYear, targetMonth - 1).toLocaleDateString('en-US', { 
-            month: 'long', 
-            year: 'numeric' 
+          monthName: new Date(targetYear, targetMonth - 1).toLocaleDateString('en-US', {
+            month: 'long',
+            year: 'numeric'
           })
         }
       }
     });
-
   } catch (error) {
     console.error('Error getting total monthly budget:', error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve total budget",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined
+      message: 'Failed to retrieve total budget',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -83,14 +91,19 @@ const getBudgetTrends = async (req, res) => {
       months ? parseInt(months) : 6
     );
 
+    const user = await User.findById(userId).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
-      message: "Budget trends retrieved successfully",
+      message: 'Budget trends retrieved successfully',
       data: {
-        trends: trends,
+        trends,
+        currency,
+        currencySymbol: getCurrencySymbol(currency),
         summary: {
           periodsAnalyzed: trends.length,
-          averageMonthlyBudget: trends.length > 0 
+          averageMonthlyBudget: trends.length > 0
             ? Math.round(trends.reduce((sum, t) => sum + t.totalBudget, 0) / trends.length)
             : 0,
           averageSpending: trends.length > 0
@@ -99,13 +112,12 @@ const getBudgetTrends = async (req, res) => {
         }
       }
     });
-
   } catch (error) {
     console.error('Error getting budget trends:', error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve budget trends",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined
+      message: 'Failed to retrieve budget trends',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -117,30 +129,20 @@ const setMonthlyBudget = async (req, res) => {
     const userId = req.user.id;
 
     // Input validation
-    if (!categoryId || !amount || !month || !year) {
-      return res.status(400).json({
-        success: false,
-        message: "Category, amount, month, and year are required"
-      });
+    if (!categoryId || amount === undefined || !month || !year) {
+      return res.status(400).json({ success: false, message: 'Category, amount, month, and year are required' });
     }
 
     if (amount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Budget amount must be greater than 0"
-      });
+      return res.status(400).json({ success: false, message: 'Budget amount must be greater than 0' });
     }
 
     if (month < 1 || month > 12) {
-      return res.status(400).json({
-        message: "Month must be between 1 and 12",
-      });
+      return res.status(400).json({ message: 'Month must be between 1 and 12' });
     }
 
     if (year < 2020 || year > 2030) {
-      return res.status(400).json({
-        message: "Year must be between 2020 and 2030",
-      });
+      return res.status(400).json({ message: 'Year must be between 2020 and 2030' });
     }
 
     // Verify category exists and user has access
@@ -152,30 +154,24 @@ const setMonthlyBudget = async (req, res) => {
       ]
     });
 
-    if (!category) {
-      return res.status(404).json({
-        success: false,
-        message: "Category not found"
-      });
-    }
+    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
 
     // Create or update budget
     const budget = await Budget.findOneAndUpdate(
       { categoryId, userId, month, year },
       { amount },
-      { 
-        new: true, 
-        upsert: true,
-        runValidators: true 
-      }
+      { new: true, upsert: true, runValidators: true }
     ).populate('categoryId', 'name');
 
     // Get updated total monthly budget
     const totalBudgetInfo = await Budget.getTotalMonthlyBudget(userId, month, year);
 
+    const user = await User.findById(userId).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(201).json({
       success: true,
-      message: "Budget set successfully",
+      message: 'Budget set successfully',
       data: {
         budget: {
           id: budget._id,
@@ -187,16 +183,17 @@ const setMonthlyBudget = async (req, res) => {
         monthlyTotals: {
           totalBudget: totalBudgetInfo.totalBudget,
           categoryCount: totalBudgetInfo.categoryCount
-        }
+        },
+        currency,
+        currencySymbol: getCurrencySymbol(currency)
       }
     });
-
   } catch (error) {
     console.error('Error setting budget:', error);
     res.status(500).json({
       success: false,
-      message: "Failed to set budget",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined
+      message: 'Failed to set budget',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -212,6 +209,9 @@ const getBudgetAlerts = async (req, res) => {
       month ? parseInt(month) : undefined,
       year ? parseInt(year) : undefined
     );
+
+    const user = await User.findById(userId).select('currency');
+    const currency = user?.currency || 'USD';
 
     const alerts = {
       overBudget: overview.categories.filter(c => c.isOverBudget),
@@ -230,16 +230,15 @@ const getBudgetAlerts = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Budget alerts retrieved successfully",
-      data: alerts
+      message: 'Budget alerts retrieved successfully',
+      data: { ...alerts, currency, currencySymbol: getCurrencySymbol(currency) }
     });
-
   } catch (error) {
     console.error('Error getting budget alerts:', error);
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve budget alerts",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined
+      message: 'Failed to retrieve budget alerts',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -253,23 +252,16 @@ const deleteBudget = async (req, res) => {
     // Delete budget
     const budget = await Budget.findByIdAndDelete({ _id: id, userId });
     if (!budget) {
-      return res.status(404).json({
-        success: false,
-        message: "Budget not found"
-      });
+      return res.status(404).json({ success: false, message: 'Budget not found' });
     }
 
-    res.status(200).json({
-      success: true,
-      message: "Budget deleted successfully"
-    });
-
+    res.status(200).json({ success: true, message: 'Budget deleted successfully' });
   } catch (error) {
     console.error('Error deleting budget:', error);
     res.status(500).json({
       success: false,
-      message: "Failed to delete budget",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined
+      message: 'Failed to delete budget',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
