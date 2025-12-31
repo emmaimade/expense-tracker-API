@@ -54,6 +54,28 @@ const userSchema = new mongoose.Schema(
         type: Date
       }
     }
+    ,
+    // Preferred currency (ISO 4217 3-letter code). Frontend may set this based on user location
+    currency: {
+      type: String,
+      uppercase: true,
+      trim: true,
+      default: 'USD',
+      validate: {
+        validator: function(v) {
+          return /^[A-Z]{3}$/.test(v);
+        },
+        message: props => `${props.value} is not a valid currency code (expected 3 uppercase letters)`
+      }
+    }
+    ,
+    // Record of last currency change (for auditing & troubleshooting)
+    lastCurrencyChange: {
+      from: { type: String, uppercase: true, trim: true },
+      to: { type: String, uppercase: true, trim: true },
+      rate: { type: Number },
+      changedAt: { type: Date }
+    }
   },
   { timestamps: true }
 );

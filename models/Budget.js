@@ -28,6 +28,21 @@ const budgetSchema = new mongoose.Schema(
       required: true,
       min: 2020,
     },
+    // Non-destructive conversion fields
+    amountOriginal: {
+      type: Number
+    },
+    currencyOriginal: {
+      type: String,
+      uppercase: true,
+      trim: true
+    },
+    conversionRate: {
+      type: Number
+    },
+    convertedAt: {
+      type: Date
+    }
   },
   { timestamps: true }
 );
@@ -144,7 +159,11 @@ budgetSchema.statics.getBudgetOverview = async function (userId, month, year) {
                 name: budget.categoryId.name,
                 isDefault: budget.categoryId.isDefault
             },
-            budget: budget.amount,
+          budget: budget.amount,
+          budgetOriginal: budget.amountOriginal ?? null,
+          budgetOriginalCurrency: budget.currencyOriginal ?? null,
+          budgetConversionRate: budget.conversionRate ?? null,
+          budgetConvertedAt: budget.convertedAt ?? null,
             spent: spent,
             remaining: remaining,
             percentageUsed: Math.round(percentageUsed * 100) / 100,
