@@ -3,6 +3,8 @@ import PDFDocument from 'pdfkit';
 import { format } from 'date-fns';
 import Expense from "../models/Expense.js";
 import Category from "../models/Category.js";
+import User from "../models/User.js";
+import { getCurrencySymbol } from '../utils/currency.js';
 
 // Reusable date range function
 // daysOrMonths: Negative for days back (e.g., -7), positive for months back (e.g., 1)
@@ -86,7 +88,7 @@ const addExpense = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "Expense created successfully",
-      data: populatedExpense,
+      data: { expense: populatedExpense, currency: (await User.findById(req.user.id).select('currency')).currency || 'USD' }
     });
   } catch (err) {
     console.error("Error adding expense:", err);
@@ -117,10 +119,13 @@ const getExpenses = async (req, res) => {
       0
     );
 
+    const user = await User.findById(req.user.id).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
       message: "Expenses retrieved successfully",
-      data: { expenses, totalExpenses },
+      data: { expenses, totalExpenses, currency, currencySymbol: getCurrencySymbol(currency) },
     });
   } catch (err) {
     console.error("Error getting expenses:", err);
@@ -159,10 +164,13 @@ const getPastWeekExpenses = async (req, res) => {
       0
     );
 
+    const user = await User.findById(req.user.id).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
       message: "Expenses for past week retrieved successfully",
-      data: { expenses, totalExpenses },
+      data: { expenses, totalExpenses, currency, currencySymbol: getCurrencySymbol(currency) },
     });
   } catch (err) {
     console.error("Error getting past week expenses:", err);
@@ -201,10 +209,13 @@ const getPastMonthExpenses = async (req, res) => {
       0
     );
 
+    const user = await User.findById(req.user.id).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
       message: "Expenses for past month retrieved successfully",
-      data: { expenses, totalExpenses },
+      data: { expenses, totalExpenses, currency, currencySymbol: getCurrencySymbol(currency) },
     });
   } catch (err) {
     console.error("Error getting past month expenses:", err);
@@ -243,10 +254,13 @@ const getThreeMonthsExpenses = async (req, res) => {
       0
     );
 
+    const user = await User.findById(req.user.id).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
       message: "Expenses for past 3 months retrieved successfully",
-      data: { expenses, totalExpenses },
+      data: { expenses, totalExpenses, currency, currencySymbol: getCurrencySymbol(currency) },
     });
   } catch (err) {
     console.error("Error getting past 3 months expenses:", err);
@@ -310,10 +324,13 @@ const getCustomExpenses = async (req, res) => {
       0
     );
 
+    const user = await User.findById(req.user.id).select('currency');
+    const currency = user?.currency || 'USD';
+
     res.status(200).json({
       success: true,
       message: `Expenses between ${startDate} and ${endDate} retrieved successfully`,
-      data: { expenses, totalExpenses },
+      data: { expenses, totalExpenses, currency, currencySymbol: getCurrencySymbol(currency) },
     });
   } catch (err) {
     console.error("Error getting custom expenses:", err);
@@ -408,11 +425,13 @@ const updateExpense = async (req, res) => {
       "category",
       "name isDefault"
     );
+    const user = await User.findById(req.user.id).select('currency');
+    const currency = user?.currency || 'USD';
 
     res.status(200).json({
       success: true,
       message: "Expense updated successfully",
-      data: updatedExpense,
+      data: { expense: updatedExpense, currency, currencySymbol: getCurrencySymbol(currency) },
     });
   } catch (err) {
     console.error("Error updating expense:", err);
@@ -531,12 +550,16 @@ const exportExpenses = async (req, res) => {
       });
     }
 
+    const user = await User.findById(userId).select('currency');
+    const currency = user?.currency || 'USD';
+    const symbol = getCurrencySymbol(currency);
+
     if (fileFormat === 'csv') {
-      // CSV export with proper escaping
+      // CSV export with proper escaping; include original values when present
       const csvContent = [
-        'Date,Description,Category,Amount',
+        'Date,Description,Category,Amount,OriginalAmount,OriginalCurrency',
         ...expenses.map(exp =>
-          `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description.replace(/"/g, '""')}","${exp.category.name}","${exp.amount.toFixed(2)}"`
+          `"${format(new Date(exp.date), 'yyyy-MM-dd')}","${exp.description.replace(/"/g, '""')}","${exp.category.name}","${symbol}${exp.amount.toFixed(2)}","${exp.amountOriginal ?? ''}","${exp.currencyOriginal ?? ''}"`
         ),
       ].join('\n');
       
@@ -630,7 +653,11 @@ const exportExpenses = async (req, res) => {
         doc.text(format(new Date(exp.date), 'MMM dd, yyyy'), col1, currentY + 5);
         doc.text(exp.description, col2, currentY + 5, { width: 140, ellipsis: true });
         doc.text(exp.category.name, col3, currentY + 5);
-        doc.text(`$${exp.amount.toFixed(2)}`, col4, currentY + 5, { align: 'right', width: 100 });
+        let amountLine = `${symbol}${exp.amount.toFixed(2)}`;
+        if (exp.amountOriginal !== undefined && exp.currencyOriginal) {
+          amountLine += `\n(orig: ${exp.currencyOriginal} ${Number(exp.amountOriginal).toFixed(2)})`;
+        }
+        doc.text(amountLine, col4, currentY + 5, { align: 'right', width: 100 });
 
         // Row separator
         doc.strokeColor('#e5e5e5')
@@ -653,9 +680,9 @@ const exportExpenses = async (req, res) => {
          
       doc.moveDown(0.5);
       doc.font('Helvetica-Bold')
-         .fillColor('black')
-         .fillOpacity(1)
-         .text(`Total: $${total.toFixed(2)}`, col4, doc.y, { align: 'right', width: 100 });
+        .fillColor('black')
+        .fillOpacity(1)
+        .text(`Total: ${symbol}${total.toFixed(2)}`, col4, doc.y, { align: 'right', width: 100 });
 
       // Finalize PDF
       doc.end();
