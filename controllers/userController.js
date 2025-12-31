@@ -1,12 +1,18 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import mongoose from "mongoose";
 import User from "../models/User.js";
+import { isValidCurrency, getCurrencySymbol } from "../utils/currency.js";
+import { getConversionRate } from '../utils/exchange.js';
+import { detectCurrency } from '../utils/geoCurrency.js';
+import Expense from '../models/Expense.js';
+import Budget from '../models/Budget.js';
 import createTransporter from "../utils/email.js";
 
 // Create user
 const registerUser = async (req, res) => {
-  const { firstName, lastName, email, password, confirmPassword } = req.body;
+  const { firstName, lastName, email, password, confirmPassword, currency } = req.body;
 
   try {
     if (!firstName || !lastName || !email || !password || !confirmPassword) {
@@ -20,7 +26,7 @@ const registerUser = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "Firstname or Lastname must be at least 2 characters long"
-      })
+      });
     }
 
     if (!password || !confirmPassword) {
@@ -52,6 +58,21 @@ const registerUser = async (req, res) => {
       });
     }
 
+    if (!currency) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select your preferred currency",
+        suggestedCurrency: detectCurrency(req)
+      });
+    }
+
+    if (!isValidCurrency(currency)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid currency code. Please select a valid currency.' 
+      });
+    }
+
     const userExists = await User.findOne({ email });
     if (userExists) {
       return res.status(400).json({ 
@@ -61,16 +82,21 @@ const registerUser = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const userCurrency = currency.toUpperCase();
+
+    // User explicitly provided currency - safe to set
     const user = await User.create({
       firstName,
       lastName,
       email,
       password: hashedPassword,
+      currency: userCurrency
     });
 
     // Send welcome email
     try {
       const transporter = createTransporter();
+      const currencySymbol = getCurrencySymbol(userCurrency);
       
       const mailOptions = {
         from: `Expense Tracker <${process.env.EMAIL_USER}>`,
@@ -80,26 +106,31 @@ const registerUser = async (req, res) => {
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2 style="color: #4B0082;">Welcome to Expense Tracker, ${firstName}!</h2>
             <p>Thank you for creating an account with us.</p>
-            <p>We're excited to help you manage your expenses and take control of your finances.</p>
             
             <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-              <h3 style="margin-top: 0; color: #333;">Getting Started:</h3>
+              <h3 style="margin-top: 0; color: #333;">Your Account Settings:</h3>
               <ul style="color: #555;">
-                <li>Log in to your account</li>
-                <li>Start tracking your expenses</li>
-                <li>Set up budgets and categories</li>
-                <li>View insightful reports</li>
+                <li><strong>Email:</strong> ${email}</li>
+                <li><strong>Currency:</strong> ${userCurrency} (${currencySymbol})</li>
               </ul>
             </div>
             
-            <p>If you have any questions or need assistance, feel free to reach out to our support team.</p>
+            <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #333;">Getting Started:</h3>
+              <ul style="color: #555;">
+                <li>Log in to your account</li>
+                <li>Start tracking your expenses in ${userCurrency}</li>
+                <li>Set up budgets and categories</li>
+                <li>View insightful reports</li>
+              </ul>
+              <p style="color: #555; margin-top: 10px;">
+                <em>Note: You can change your currency anytime in Settings.</em>
+              </p>
+            </div>
+            
+            <p>If you have any questions, feel free to reach out to our support team.</p>
             
             <p style="margin-top: 30px;">Best regards,<br>The Expense Tracker Team</p>
-            
-            <hr style="border: none; border-top: 1px solid #ddd; margin: 30px 0;">
-            <p style="font-size: 12px; color: #888;">
-              This email was sent to ${email}. If you didn't create this account, please contact our support team immediately.
-            </p>
           </div>
         `
       };
@@ -107,7 +138,6 @@ const registerUser = async (req, res) => {
       await transporter.sendMail(mailOptions);
     } catch (emailError) {
       console.error("Error sending welcome email:", emailError);
-      // Don't fail registration if email fails
     }
 
     res.status(201).json({ 
@@ -117,7 +147,9 @@ const registerUser = async (req, res) => {
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
-        email: user.email
+        email: user.email,
+        currency: user.currency,
+        currencySymbol: getCurrencySymbol(user.currency)
       }
     });
   } catch (error) {
@@ -168,6 +200,7 @@ const loginUser = async (req, res) => {
         id: user._id,
         name: `${user.firstName} ${user.lastName}`,
         email: user.email,
+        currency: user.currency || 'USD',
       },
       token,
     });
@@ -211,12 +244,11 @@ const forgotPassword = async(req, res) => {
     user.resetPasswordExpires = resetTokenExpires;
     await user.save();
 
-    const transporter = createTransporter();
-
     // Generate reset link
     const resetUrl = `${process.env.BASE_URL}/user/reset-password?token=${resetToken}`;
 
-    // Email options
+    // Send email
+    const transporter = createTransporter();
     const mailOptions = {
       from: `Expense Tracker <${process.env.EMAIL_USER}>`,
       to: email,
@@ -249,7 +281,6 @@ const forgotPassword = async(req, res) => {
       `
     };
 
-    // Send email
     await transporter.sendMail(mailOptions);
 
     res.status(200).json({
@@ -1006,6 +1037,299 @@ const changePassword = async (req, res) => {
   }
 };
 
+// Update user preferred currency
+const updateCurrency = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { currency, convertExisting } = req.body;
+
+    // Input validation
+    if (!currency) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Currency is required' 
+      });
+    }
+
+    if (!isValidCurrency(currency)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid currency code. Please use a valid ISO 4217 currency code (e.g., USD, EUR, NGN)' 
+      });
+    }
+
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+
+    const oldCurrency = user.currency || 'USD';
+    const newCurrency = currency.toUpperCase();
+
+    // Check if currency is actually changing
+    if (oldCurrency === newCurrency) {
+      return res.status(200).json({ 
+        success: true, 
+        message: 'Currency is already set to ' + newCurrency, 
+        currency: newCurrency,
+        currencySymbol: getCurrencySymbol(newCurrency)
+      });
+    }
+
+    // Check if user has existing expenses or budgets
+    const [expenseCount, budgetCount] = await Promise.all([
+      Expense.countDocuments({ userId }),
+      Budget.countDocuments({ userId })
+    ]);
+
+    const hasExistingData = expenseCount > 0 || budgetCount > 0;
+
+    // Determine conversion behavior
+    let shouldConvert = false;
+    
+    if (hasExistingData) {
+      if (convertExisting === undefined) {
+        // User has data but didn't specify - require explicit choice
+        return res.status(400).json({
+          success: false,
+          message: 'You have existing expenses or budgets. Please specify whether to convert them.',
+          requiresConversion: true,
+          existingData: {
+            expenseCount,
+            budgetCount,
+            currentCurrency: oldCurrency,
+            newCurrency: newCurrency
+          },
+          hint: 'Set convertExisting to true to convert all existing data, or false to keep amounts unchanged'
+        });
+      }
+      shouldConvert = convertExisting === true || convertExisting === 'true';
+    }
+
+    // Fetch conversion rate
+    let rate;
+    try {
+      rate = await getConversionRate(oldCurrency, newCurrency);
+      console.log(`Exchange rate ${oldCurrency} -> ${newCurrency}: ${rate}`);
+    } catch (err) {
+      console.error('Error fetching conversion rate:', err);
+      return res.status(502).json({ 
+        success: false, 
+        message: 'Failed to fetch exchange rate. Please try again later.',
+        error: process.env.NODE_ENV === 'development' ? err.message : undefined
+      });
+    }
+
+    let expenseUpdateResult = { matchedCount: 0, modifiedCount: 0 };
+    let budgetUpdateResult = { matchedCount: 0, modifiedCount: 0 };
+
+    // Convert existing data if requested
+    if (shouldConvert && hasExistingData) {
+      console.log(`Converting ${expenseCount} expenses and ${budgetCount} budgets from ${oldCurrency} to ${newCurrency}`);
+
+      // Use MongoDB transaction for data integrity
+      const session = await mongoose.startSession();
+      
+      try {
+        await session.withTransaction(async () => {
+          // Query for unconverted expenses or those in old currency
+          const expenseQuery = {
+            userId,
+            $or: [
+              { amountOriginal: { $exists: false } },
+              { currencyOriginal: oldCurrency }
+            ]
+          };
+
+          // Update expenses
+          if (expenseCount > 0) {
+            expenseUpdateResult = await Expense.updateMany(
+              expenseQuery,
+              [
+                {
+                  $set: {
+                    // Preserve original if first conversion, otherwise keep existing original
+                    amountOriginal: { $ifNull: ["$amountOriginal", "$amount"] },
+                    currencyOriginal: { $ifNull: ["$currencyOriginal", oldCurrency] },
+                    // Convert amount
+                    amount: { $round: [{ $multiply: ["$amount", rate] }, 2] },
+                    // Store conversion metadata
+                    conversionRate: rate,
+                    convertedAt: "$$NOW",
+                    convertedFrom: oldCurrency,
+                    convertedTo: newCurrency
+                  }
+                }
+              ],
+              { session }
+            );
+          }
+
+          // Query for unconverted budgets or those in old currency
+          const budgetQuery = {
+            userId,
+            $or: [
+              { amountOriginal: { $exists: false } },
+              { currencyOriginal: oldCurrency }
+            ]
+          };
+
+          // Update budgets
+          if (budgetCount > 0) {
+            budgetUpdateResult = await Budget.updateMany(
+              budgetQuery,
+              [
+                {
+                  $set: {
+                    amountOriginal: { $ifNull: ["$amountOriginal", "$amount"] },
+                    currencyOriginal: { $ifNull: ["$currencyOriginal", oldCurrency] },
+                    amount: { $round: [{ $multiply: ["$amount", rate] }, 2] },
+                    conversionRate: rate,
+                    convertedAt: "$$NOW",
+                    convertedFrom: oldCurrency,
+                    convertedTo: newCurrency
+                  }
+                }
+              ],
+              { session }
+            );
+          }
+
+          console.log(`Converted ${expenseUpdateResult.modifiedCount} expenses and ${budgetUpdateResult.modifiedCount} budgets`);
+        });
+
+        await session.endSession();
+      } catch (conversionError) {
+        await session.endSession();
+        console.error('Error during currency conversion:', conversionError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to convert existing data. Your currency was not changed.',
+          error: process.env.NODE_ENV === 'development' ? conversionError.message : undefined
+        });
+      }
+    }
+
+    // Update user currency
+    user.currency = newCurrency;
+    user.lastCurrencyChange = { 
+      from: oldCurrency, 
+      to: newCurrency, 
+      rate, 
+      changedAt: new Date(),
+      dataConverted: shouldConvert,
+      expensesConverted: expenseUpdateResult.modifiedCount || 0,
+      budgetsConverted: budgetUpdateResult.modifiedCount || 0
+    };
+    await user.save();
+
+    // Send confirmation email
+    if (shouldConvert && hasExistingData) {
+      try {
+        const transporter = createTransporter();
+        const newSymbol = getCurrencySymbol(newCurrency);
+        const oldSymbol = getCurrencySymbol(oldCurrency);
+
+        const mailOptions = {
+          from: `Expense Tracker <${process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: 'Currency Successfully Updated',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #28a745;">✓ Currency Successfully Updated</h2>
+              <p>Hello ${user.firstName},</p>
+              <p>Your preferred currency has been successfully updated.</p>
+              
+              <div style="background-color: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #155724;">
+                  <strong>Currency Change Summary</strong><br>
+                  Previous Currency: ${oldCurrency} (${oldSymbol})<br>
+                  New Currency: ${newCurrency} (${newSymbol})<br>
+                  Exchange Rate: ${rate.toFixed(4)}<br>
+                  Date: ${new Date().toLocaleString('en-US', { 
+                    dateStyle: 'full', 
+                    timeStyle: 'short' 
+                  })}
+                </p>
+              </div>
+
+              ${shouldConvert ? `
+                <div style="background-color: #d1ecf1; border-left: 4px solid #0c5460; padding: 15px; margin: 20px 0;">
+                  <p style="margin: 0; color: #0c5460;">
+                    <strong>Data Conversion Complete</strong><br>
+                    ✓ ${expenseUpdateResult.modifiedCount} expenses converted<br>
+                    ✓ ${budgetUpdateResult.modifiedCount} budgets converted<br>
+                    ✓ Original amounts preserved for reference
+                  </p>
+                </div>
+
+                <p><strong>What this means:</strong></p>
+                <ul style="color: #555;">
+                  <li>All your expenses are now displayed in ${newCurrency}</li>
+                  <li>All your budgets are now in ${newCurrency}</li>
+                  <li>New expenses will be recorded in ${newCurrency}</li>
+                  <li>Original amounts are saved in case you need them</li>
+                </ul>
+              ` : ''}
+              
+              <div style="background-color: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
+                <p style="margin: 0; color: #856404;">
+                  <strong>⚠️ Security Notice</strong><br>
+                  If you did not make this change, please contact support immediately.
+                </p>
+              </div>
+              
+              <p style="margin-top: 30px;">Best regards,<br>The Expense Tracker Team</p>
+            </div>
+          `
+        };
+
+        await transporter.sendMail(mailOptions);
+      } catch (emailError) {
+        console.error('Error sending currency update email:', emailError);
+        // Don't fail the update if email fails
+      }
+    }
+
+    // Return success response
+    res.status(200).json({
+      success: true,
+      message: shouldConvert 
+        ? `Currency updated to ${newCurrency}. ${expenseUpdateResult.modifiedCount} expenses and ${budgetUpdateResult.modifiedCount} budgets converted successfully.`
+        : `Currency preference updated to ${newCurrency}. Existing data amounts unchanged.`,
+      data: {
+        currency: user.currency,
+        currencySymbol: getCurrencySymbol(user.currency),
+        oldCurrency,
+        conversionRate: rate,
+        dataConverted: shouldConvert,
+        conversion: shouldConvert ? {
+          expenses: {
+            total: expenseCount,
+            converted: expenseUpdateResult.modifiedCount || 0
+          },
+          budgets: {
+            total: budgetCount,
+            converted: budgetUpdateResult.modifiedCount || 0
+          }
+        } : null
+      }
+    });
+
+  } catch (err) {
+    console.error('Error updating currency:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal Server Error',
+      error: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+};
+
 // Get Current User Profile
 const getCurrentUser = async (req, res) => {
   try {
@@ -1027,11 +1351,12 @@ const getCurrentUser = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      user: {
+        user: {
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
         fullName: `${user.firstName} ${user.lastName}`,
+          currency: user.currency || 'USD',
         email: user.email,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -1061,5 +1386,6 @@ export {
   verifyCurrentEmail,
   verifyNewEmail,
   changePassword,
+  updateCurrency,
   getCurrentUser
 };
