@@ -75,6 +75,10 @@ components:
           format: email
           description: User's email address
           example: "john@example.com"
+        currency:
+          type: string
+          description: "Preferred currency (ISO 4217 3-letter code)"
+          example: "USD"
         createdAt:
           type: string
           format: date-time
@@ -85,6 +89,34 @@ components:
           format: date-time
           description: Last update timestamp
           example: "2025-10-06T14:22:00.000Z"
+        lastCurrencyChange:
+          type: object
+          description: "Metadata for the last currency update (audit info)"
+          properties:
+            from:
+              type: string
+              example: "USD"
+            to:
+              type: string
+              example: "NGN"
+            rate:
+              type: number
+              format: float
+              example: 912.34
+            changedAt:
+              type: string
+              format: date-time
+              example: "2025-12-31T12:00:00.000Z"
+            dataConverted:
+              type: boolean
+              description: Whether existing records were converted during the update
+              example: true
+            expensesConverted:
+              type: integer
+              example: 42
+            budgetsConverted:
+              type: integer
+              example: 5
         emailChangeInProgress:
           type: boolean
           description: Whether an email change is currently pending
@@ -149,6 +181,10 @@ components:
           format: password
           description: Password confirmation (must match password)
           example: "Password123"
+        currency:
+          type: string
+          description: "Optional preferred currency (ISO 4217 3-letter code)"
+          example: "USD"
 
     UserLogin:
       type: object
@@ -192,6 +228,10 @@ components:
           format: password
           description: Current password (required for security)
           example: "Password123"
+        currency:
+          type: string
+          description: "Preferred currency (ISO 4217 3-letter code). Prefer using dedicated currency endpoint to avoid requiring current password."
+          example: "USD"
 
     ChangePassword:
       type: object
@@ -353,6 +393,41 @@ components:
           format: date-time
           description: Last update timestamp
           example: "2025-10-06T10:30:00.000Z"
+        currency:
+          type: string
+          description: "Currency code for this budget (ISO 4217 3-letter)"
+          example: "USD"
+        currencySymbol:
+          type: string
+          description: "Symbol for the currency"
+          example: "$"
+        amountOriginal:
+          type: number
+          format: float
+          description: "Original budget amount before conversion (non-destructive)"
+          example: 500.00
+        currencyOriginal:
+          type: string
+          description: "Original currency code before conversion"
+          example: "USD"
+        conversionRate:
+          type: number
+          format: float
+          description: "Exchange rate used for last conversion"
+          example: 1.2543
+        convertedAt:
+          type: string
+          format: date-time
+          description: "Timestamp when the exchange conversion was applied"
+          example: "2025-12-31T12:05:00.000Z"
+        convertedFrom:
+          type: string
+          description: "The currency the amount was converted from"
+          example: "USD"
+        convertedTo:
+          type: string
+          description: "The currency the amount was converted to"
+          example: "NGN"
 
     BudgetCreate:
       type: object
@@ -787,6 +862,41 @@ components:
           format: date-time
           description: Last update timestamp
           example: "2025-10-06T10:30:00.000Z"
+        currency:
+          type: string
+          description: "Currency code for this expense (ISO 4217 3-letter)"
+          example: "USD"
+        currencySymbol:
+          type: string
+          description: "Symbol for the currency"
+          example: "$"
+        amountOriginal:
+          type: number
+          format: float
+          description: "Original amount before conversion (non-destructive)"
+          example: 45.50
+        currencyOriginal:
+          type: string
+          description: "Original currency code before conversion"
+          example: "USD"
+        conversionRate:
+          type: number
+          format: float
+          description: "Exchange rate used for last conversion"
+          example: 1.2543
+        convertedAt:
+          type: string
+          format: date-time
+          description: "Timestamp when the exchange conversion was applied"
+          example: "2025-12-31T12:05:00.000Z"
+        convertedFrom:
+          type: string
+          description: "The currency the amount was converted from"
+          example: "USD"
+        convertedTo:
+          type: string
+          description: "The currency the amount was converted to"
+          example: "NGN"
 
     ExpenseCreate:
       type: object
@@ -1331,6 +1441,128 @@ paths:
                     message: "Current password is incorrect"
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/currency:
+    put:
+      tags:
+        - User Profile
+      summary: Update preferred currency
+      description: Update the authenticated user's preferred currency (ISO 4217 code).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currency
+              properties:
+                currency:
+                  type: string
+                  description: "Preferred currency code (3-letter ISO 4217)"
+                  example: "USD"
+                convertExisting:
+                  type: boolean
+                  description: "If true, convert all existing expenses and budgets to the new currency (non-destructive). Defaults to false."
+                  example: true
+            examples:
+              change_currency:
+                summary: Change currency to NGN
+                value:
+                  currency: "NGN"
+                  convertExisting: true
+      responses:
+        '200':
+          description: Currency updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Currency updated successfully"
+                  currency:
+                    type: string
+                    example: "USD"
+                  converted:
+                    type: boolean
+                    description: Whether existing data was converted during this change
+                    example: false
+                  expenseUpdateResult:
+                    type: object
+                    properties:
+                      matched:
+                        type: integer
+                        example: 0
+                      modified:
+                        type: integer
+                        example: 0
+                  budgetUpdateResult:
+                    type: object
+                    properties:
+                      matched:
+                        type: integer
+                        example: 0
+                      modified:
+                        type: integer
+                        example: 0
+                  lastCurrencyChange:
+                    type: object
+                    properties:
+                      from:
+                        type: string
+                        example: "USD"
+                      to:
+                        type: string
+                        example: "NGN"
+                      rate:
+                        type: number
+                        format: float
+                        example: 912.34
+                      changedAt:
+                        type: string
+                        format: date-time
+                        example: "2025-12-31T12:00:00.000Z"
+                      dataConverted:
+                        type: boolean
+                        example: true
+                      expensesConverted:
+                        type: integer
+                        example: 42
+                      budgetsConverted:
+                        type: integer
+                        example: 5
+        '400':
+          description: Bad request - validation error (may require user's decision to convert existing data)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                requires_conversion:
+                  summary: Requires user decision to convert existing data
+                  value:
+                    success: false
+                    message: "You have existing expenses or budgets. Please specify whether to convert them."
+                    requiresConversion: true
+                    existingData:
+                      expenseCount: 42
+                      budgetCount: 3
+                      currentCurrency: "USD"
+                      newCurrency: "NGN"
+                    hint: "Set convertExisting to true to convert all existing data, or false to keep amounts unchanged"
+        '401':
+          description: Unauthorized - invalid or missing token
           content:
             application/json:
               schema:
