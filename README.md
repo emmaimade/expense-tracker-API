@@ -97,6 +97,7 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 | PUT    | `/user/change-password`             | **[Auth Required]** Change user's password (requires current password)           |
 | GET    | `/user//verify-email-change/current`| Verify old email in the 2-step change process                                |
 | GET    | `/user/verify-email-change/new`     | Verify new email to finalize the change                                      |
+| PUT    | `/user/currency`                   | **[Auth Required]** Update preferred currency (3-letter ISO code, e.g. USD)   |
 
 > ⚠️ All routes below require the token in `Authorization: Bearer <token>`
 
@@ -160,6 +161,22 @@ curl -X POST https://expense-tracker-api-hvss.onrender.com/expense \
     "category": "Food",
     "date": "2025-06-09"
   }'
+```
+### Change Preferred Currency (non-destructive)
+
+When updating the user's preferred currency you can optionally convert existing expenses and budgets. Conversion is **non-destructive** by default — original amounts are preserved in `amountOriginal`/`currencyOriginal` fields. Use `convertExisting: true` to perform the conversion during the update.
+
+```bash
+curl -X PUT https://expense-tracker-api-hvss.onrender.com/user/currency \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -d '{"currency":"NGN", "convertExisting": true}'
+```
+
+Note: If you want to backfill existing documents so they include `amountOriginal`/`currencyOriginal` ahead of any conversion, run the migration script:
+
+```bash
+npm run migrate:backfill-originals
 ```
 ### Sample Response
 ```json
