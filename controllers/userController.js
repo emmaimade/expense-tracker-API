@@ -1074,9 +1074,11 @@ const updateCurrency = async (req, res) => {
     if (oldCurrency === newCurrency) {
       return res.status(200).json({ 
         success: true, 
-        message: 'Currency is already set to ' + newCurrency, 
-        currency: newCurrency,
-        currencySymbol: getCurrencySymbol(newCurrency)
+        message: 'Currency is already set to ' + newCurrency,
+        data: {
+          currency: newCurrency,
+          currencySymbol: getCurrencySymbol(newCurrency)
+        }
       });
     }
 
@@ -1092,7 +1094,7 @@ const updateCurrency = async (req, res) => {
     let shouldConvert = false;
     
     if (hasExistingData) {
-      if (convertExisting === undefined) {
+      if (convertExisting === undefined || convertExisting === null) {
         // User has data but didn't specify - require explicit choice
         return res.status(400).json({
           success: false,
@@ -1114,9 +1116,9 @@ const updateCurrency = async (req, res) => {
     let rate;
     try {
       rate = await getConversionRate(oldCurrency, newCurrency);
-      console.log(`Exchange rate ${oldCurrency} -> ${newCurrency}: ${rate}`);
+      console.log(`✅ Exchange rate ${oldCurrency} → ${newCurrency}: ${rate}`);
     } catch (err) {
-      console.error('Error fetching conversion rate:', err);
+      console.error('❌ Error fetching conversion rate:', err);
       return res.status(502).json({ 
         success: false, 
         message: 'Failed to fetch exchange rate. Please try again later.',
@@ -1129,35 +1131,39 @@ const updateCurrency = async (req, res) => {
 
     // Convert existing data if requested
     if (shouldConvert && hasExistingData) {
-      console.log(`Converting ${expenseCount} expenses and ${budgetCount} budgets from ${oldCurrency} to ${newCurrency}`);
+      console.log(`🔄 Converting ${expenseCount} expenses and ${budgetCount} budgets from ${oldCurrency} to ${newCurrency}`);
 
       // Use MongoDB transaction for data integrity
       const session = await mongoose.startSession();
       
       try {
         await session.withTransaction(async () => {
-          // Query for unconverted expenses or those in old currency
-          const expenseQuery = {
-            userId,
-            $or: [
-              { amountOriginal: { $exists: false } },
-              { currencyOriginal: oldCurrency }
-            ]
-          };
-
-          // Update expenses
+          // ✅ FIX: Update ALL user expenses (not just unconverted ones)
+          // We convert based on CURRENT amount, not original
           if (expenseCount > 0) {
             expenseUpdateResult = await Expense.updateMany(
-              expenseQuery,
+              { userId }, // Simple query: all user expenses
               [
                 {
                   $set: {
-                    // Preserve original if first conversion, otherwise keep existing original
-                    amountOriginal: { $ifNull: ["$amountOriginal", "$amount"] },
-                    currencyOriginal: { $ifNull: ["$currencyOriginal", oldCurrency] },
-                    // Convert amount
+                    // Preserve FIRST original amount (if exists, keep it; otherwise save current)
+                    amountOriginal: { 
+                      $cond: {
+                        if: { $gt: [{ $ifNull: ["$amountOriginal", null] }, null] },
+                        then: "$amountOriginal", // Keep existing original
+                        else: "$amount" // Save current as original (first time)
+                      }
+                    },
+                    currencyOriginal: { 
+                      $cond: {
+                        if: { $gt: [{ $ifNull: ["$currencyOriginal", null] }, null] },
+                        then: "$currencyOriginal", // Keep existing original currency
+                        else: oldCurrency // Save current currency as original
+                      }
+                    },
+                    // Convert CURRENT amount to new currency
                     amount: { $round: [{ $multiply: ["$amount", rate] }, 2] },
-                    // Store conversion metadata
+                    // Update conversion metadata
                     conversionRate: rate,
                     convertedAt: "$$NOW",
                     convertedFrom: oldCurrency,
@@ -1167,27 +1173,35 @@ const updateCurrency = async (req, res) => {
               ],
               { session }
             );
+            
+            console.log(`✅ Expenses: matched ${expenseUpdateResult.matchedCount}, modified ${expenseUpdateResult.modifiedCount}`);
           }
 
-          // Query for unconverted budgets or those in old currency
-          const budgetQuery = {
-            userId,
-            $or: [
-              { amountOriginal: { $exists: false } },
-              { currencyOriginal: oldCurrency }
-            ]
-          };
-
-          // Update budgets
+          // ✅ FIX: Update ALL user budgets (not just unconverted ones)
           if (budgetCount > 0) {
             budgetUpdateResult = await Budget.updateMany(
-              budgetQuery,
+              { userId }, // Simple query: all user budgets
               [
                 {
                   $set: {
-                    amountOriginal: { $ifNull: ["$amountOriginal", "$amount"] },
-                    currencyOriginal: { $ifNull: ["$currencyOriginal", oldCurrency] },
+                    // Preserve FIRST original amount
+                    amountOriginal: { 
+                      $cond: {
+                        if: { $gt: [{ $ifNull: ["$amountOriginal", null] }, null] },
+                        then: "$amountOriginal",
+                        else: "$amount"
+                      }
+                    },
+                    currencyOriginal: { 
+                      $cond: {
+                        if: { $gt: [{ $ifNull: ["$currencyOriginal", null] }, null] },
+                        then: "$currencyOriginal",
+                        else: oldCurrency
+                      }
+                    },
+                    // Convert CURRENT amount
                     amount: { $round: [{ $multiply: ["$amount", rate] }, 2] },
+                    // Update conversion metadata
                     conversionRate: rate,
                     convertedAt: "$$NOW",
                     convertedFrom: oldCurrency,
@@ -1197,15 +1211,17 @@ const updateCurrency = async (req, res) => {
               ],
               { session }
             );
+            
+            console.log(`✅ Budgets: matched ${budgetUpdateResult.matchedCount}, modified ${budgetUpdateResult.modifiedCount}`);
           }
 
-          console.log(`Converted ${expenseUpdateResult.modifiedCount} expenses and ${budgetUpdateResult.modifiedCount} budgets`);
+          console.log(`✅ Conversion complete: ${expenseUpdateResult.modifiedCount} expenses, ${budgetUpdateResult.modifiedCount} budgets`);
         });
 
         await session.endSession();
       } catch (conversionError) {
         await session.endSession();
-        console.error('Error during currency conversion:', conversionError);
+        console.error('❌ Error during currency conversion:', conversionError);
         return res.status(500).json({
           success: false,
           message: 'Failed to convert existing data. Your currency was not changed.',
@@ -1226,6 +1242,8 @@ const updateCurrency = async (req, res) => {
       budgetsConverted: budgetUpdateResult.modifiedCount || 0
     };
     await user.save();
+
+    console.log(`✅ User currency updated to ${newCurrency}`);
 
     // Send confirmation email
     if (shouldConvert && hasExistingData) {
@@ -1307,21 +1325,24 @@ const updateCurrency = async (req, res) => {
         oldCurrency,
         conversionRate: rate,
         dataConverted: shouldConvert,
+        lastCurrencyChange: user.lastCurrencyChange,
         conversion: shouldConvert ? {
           expenses: {
             total: expenseCount,
-            converted: expenseUpdateResult.modifiedCount || 0
+            converted: expenseUpdateResult.modifiedCount || 0,
+            matched: expenseUpdateResult.matchedCount || 0
           },
           budgets: {
             total: budgetCount,
-            converted: budgetUpdateResult.modifiedCount || 0
+            converted: budgetUpdateResult.modifiedCount || 0,
+            matched: budgetUpdateResult.matchedCount || 0
           }
         } : null
       }
     });
 
   } catch (err) {
-    console.error('Error updating currency:', err);
+    console.error('❌ Error updating currency:', err);
     res.status(500).json({ 
       success: false, 
       message: 'Internal Server Error',
