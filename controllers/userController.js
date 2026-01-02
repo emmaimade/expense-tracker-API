@@ -1043,6 +1043,8 @@ const updateCurrency = async (req, res) => {
     const userId = req.user.id;
     const { currency, convertExisting } = req.body;
 
+    console.log('💱 updateCurrency called:', { userId, currency, convertExisting, type: typeof convertExisting });
+
     // Input validation
     if (!currency) {
       return res.status(400).json({ 
@@ -1070,6 +1072,8 @@ const updateCurrency = async (req, res) => {
     const oldCurrency = user.currency || 'USD';
     const newCurrency = currency.toUpperCase();
 
+    console.log(`🔄 Currency change: ${oldCurrency} → ${newCurrency}`);
+
     // Check if currency is actually changing
     if (oldCurrency === newCurrency) {
       return res.status(200).json({ 
@@ -1088,31 +1092,33 @@ const updateCurrency = async (req, res) => {
       Budget.countDocuments({ userId })
     ]);
 
+    console.log(`📊 Existing data: ${expenseCount} expenses, ${budgetCount} budgets`);
+
     const hasExistingData = expenseCount > 0 || budgetCount > 0;
 
-    // Determine conversion behavior
-    let shouldConvert = false;
-    
-    if (hasExistingData) {
-      if (convertExisting === undefined || convertExisting === null) {
-        // User has data but didn't specify - require explicit choice
-        return res.status(400).json({
-          success: false,
-          message: 'You have existing expenses or budgets. Please specify whether to convert them.',
-          requiresConversion: true,
-          existingData: {
-            expenseCount,
-            budgetCount,
-            currentCurrency: oldCurrency,
-            newCurrency: newCurrency
-          },
-          hint: 'Set convertExisting to true to convert all existing data, or false to keep amounts unchanged'
-        });
-      }
-      shouldConvert = convertExisting === true || convertExisting === 'true';
+    // ✅ FIX: If user has data and convertExisting is not explicitly set, ask for confirmation
+    if (hasExistingData && (convertExisting === undefined || convertExisting === null)) {
+      console.log('⚠️ Existing data found, convertExisting not specified. Requiring confirmation.');
+      return res.status(400).json({
+        success: false,
+        message: 'You have existing expenses or budgets. Please specify whether to convert them.',
+        requiresConversion: true,
+        existingData: {
+          expenseCount,
+          budgetCount,
+          currentCurrency: oldCurrency,
+          newCurrency: newCurrency
+        },
+        hint: 'Set convertExisting to true to convert all existing data, or false to keep amounts unchanged'
+      });
     }
 
-    // Fetch conversion rate
+    // Determine conversion behavior
+    const shouldConvert = convertExisting === true || convertExisting === 'true';
+    
+    console.log(`🎯 Should convert: ${shouldConvert}`);
+
+    // Fetch conversion rate (needed even if not converting, for metadata)
     let rate;
     try {
       rate = await getConversionRate(oldCurrency, newCurrency);
@@ -1138,49 +1144,10 @@ const updateCurrency = async (req, res) => {
       
       try {
         await session.withTransaction(async () => {
-          // ✅ FIX: Update ALL user expenses (not just unconverted ones)
-          // We convert based on CURRENT amount, not original
+          // Update ALL user expenses
           if (expenseCount > 0) {
             expenseUpdateResult = await Expense.updateMany(
-              { userId }, // Simple query: all user expenses
-              [
-                {
-                  $set: {
-                    // Preserve FIRST original amount (if exists, keep it; otherwise save current)
-                    amountOriginal: { 
-                      $cond: {
-                        if: { $gt: [{ $ifNull: ["$amountOriginal", null] }, null] },
-                        then: "$amountOriginal", // Keep existing original
-                        else: "$amount" // Save current as original (first time)
-                      }
-                    },
-                    currencyOriginal: { 
-                      $cond: {
-                        if: { $gt: [{ $ifNull: ["$currencyOriginal", null] }, null] },
-                        then: "$currencyOriginal", // Keep existing original currency
-                        else: oldCurrency // Save current currency as original
-                      }
-                    },
-                    // Convert CURRENT amount to new currency
-                    amount: { $round: [{ $multiply: ["$amount", rate] }, 2] },
-                    // Update conversion metadata
-                    conversionRate: rate,
-                    convertedAt: "$$NOW",
-                    convertedFrom: oldCurrency,
-                    convertedTo: newCurrency
-                  }
-                }
-              ],
-              { session }
-            );
-            
-            console.log(`✅ Expenses: matched ${expenseUpdateResult.matchedCount}, modified ${expenseUpdateResult.modifiedCount}`);
-          }
-
-          // ✅ FIX: Update ALL user budgets (not just unconverted ones)
-          if (budgetCount > 0) {
-            budgetUpdateResult = await Budget.updateMany(
-              { userId }, // Simple query: all user budgets
+              { userId },
               [
                 {
                   $set: {
@@ -1199,9 +1166,44 @@ const updateCurrency = async (req, res) => {
                         else: oldCurrency
                       }
                     },
-                    // Convert CURRENT amount
+                    // Convert CURRENT amount to new currency
                     amount: { $round: [{ $multiply: ["$amount", rate] }, 2] },
                     // Update conversion metadata
+                    conversionRate: rate,
+                    convertedAt: "$$NOW",
+                    convertedFrom: oldCurrency,
+                    convertedTo: newCurrency
+                  }
+                }
+              ],
+              { session }
+            );
+            
+            console.log(`✅ Expenses: matched ${expenseUpdateResult.matchedCount}, modified ${expenseUpdateResult.modifiedCount}`);
+          }
+
+          // Update ALL user budgets
+          if (budgetCount > 0) {
+            budgetUpdateResult = await Budget.updateMany(
+              { userId },
+              [
+                {
+                  $set: {
+                    amountOriginal: { 
+                      $cond: {
+                        if: { $gt: [{ $ifNull: ["$amountOriginal", null] }, null] },
+                        then: "$amountOriginal",
+                        else: "$amount"
+                      }
+                    },
+                    currencyOriginal: { 
+                      $cond: {
+                        if: { $gt: [{ $ifNull: ["$currencyOriginal", null] }, null] },
+                        then: "$currencyOriginal",
+                        else: oldCurrency
+                      }
+                    },
+                    amount: { $round: [{ $multiply: ["$amount", rate] }, 2] },
                     conversionRate: rate,
                     convertedAt: "$$NOW",
                     convertedFrom: oldCurrency,
@@ -1309,7 +1311,6 @@ const updateCurrency = async (req, res) => {
         await transporter.sendMail(mailOptions);
       } catch (emailError) {
         console.error('Error sending currency update email:', emailError);
-        // Don't fail the update if email fails
       }
     }
 
