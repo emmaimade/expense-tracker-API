@@ -84,7 +84,7 @@ const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const userCurrency = currency.toUpperCase();
 
-    // User explicitly provided currency - safe to set
+    // Create user
     const user = await User.create({
       firstName,
       lastName,
@@ -93,7 +93,15 @@ const registerUser = async (req, res) => {
       currency: userCurrency
     });
 
-    // Send welcome email
+    // ✅ CRITICAL FIX: Generate JWT token for auto-login
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
+
+    console.log('✅ User registered successfully:', user.email);
+    console.log('🔑 Token generated for auto-login');
+
+    // Send welcome email (async, don't wait)
     try {
       const transporter = createTransporter();
       const currencySymbol = getCurrencySymbol(userCurrency);
@@ -118,14 +126,11 @@ const registerUser = async (req, res) => {
             <div style="background-color: #e8f4f8; padding: 15px; border-radius: 5px; margin: 20px 0;">
               <h3 style="margin-top: 0; color: #333;">Getting Started:</h3>
               <ul style="color: #555;">
-                <li>Log in to your account</li>
-                <li>Start tracking your expenses in ${userCurrency}</li>
+                <li>Track your expenses in ${userCurrency}</li>
                 <li>Set up budgets and categories</li>
                 <li>View insightful reports</li>
+                <li>Change your currency anytime in Settings</li>
               </ul>
-              <p style="color: #555; margin-top: 10px;">
-                <em>Note: You can change your currency anytime in Settings.</em>
-              </p>
             </div>
             
             <p>If you have any questions, feel free to reach out to our support team.</p>
@@ -138,8 +143,10 @@ const registerUser = async (req, res) => {
       await transporter.sendMail(mailOptions);
     } catch (emailError) {
       console.error("Error sending welcome email:", emailError);
+      // Don't fail registration if email fails
     }
 
+    // ✅ Return response with token (same structure as login)
     res.status(201).json({ 
       success: true,
       message: "User created successfully", 
@@ -150,7 +157,8 @@ const registerUser = async (req, res) => {
         email: user.email,
         currency: user.currency,
         currencySymbol: getCurrencySymbol(user.currency)
-      }
+      },
+      token // ✅ CRITICAL: Include token for auto-login
     });
   } catch (error) {
     console.error("Registration error:", error);
