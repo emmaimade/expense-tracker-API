@@ -1,36 +1,17 @@
-import nodemailer from 'nodemailer';
-import { google } from 'googleapis';
+import { Resend } from 'resend';
 
-const getTransporter = async () => {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GMAIL_CLIENT_ID,
-    process.env.GMAIL_CLIENT_SECRET,
-    'https://developers.google.com/oauthplayground'
-  );
+let resend;
 
-  oauth2Client.setCredentials({
-    refresh_token: process.env.GMAIL_REFRESH_TOKEN,
-  });
-
-  const accessToken = await oauth2Client.getAccessToken();
-
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      type: 'OAuth2',
-      user: process.env.EMAIL_USER,
-      clientId: process.env.GMAIL_CLIENT_ID,
-      clientSecret: process.env.GMAIL_CLIENT_SECRET,
-      refreshToken: process.env.GMAIL_REFRESH_TOKEN,
-      accessToken: accessToken.token,
-    },
-  });
+const getResend = () => {
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
 };
 
 const sendEmail = async ({ to, subject, html }) => {
-  const transporter = await getTransporter();
-  await transporter.sendMail({
-    from: `SpendWise <${process.env.EMAIL_USER}>`,
+  await getResend().emails.send({
+    from: 'SpendWise <onboarding@resend.dev>',
     to,
     subject,
     html,
