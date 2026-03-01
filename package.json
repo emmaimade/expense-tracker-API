@@ -23,9 +23,10 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "geoip-lite": "^1.4.10",
+    "googleapis": "^171.4.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.13.0",
-    "nodemailer": "^7.0.6",
+    "nodemailer": "^7.0.13",
     "pdfkit": "^0.17.2",
     "swagger-ui-express": "^5.0.1",
     "yamljs": "^0.3.0"
