@@ -8,7 +8,8 @@ import YAML from "yamljs";
 import path from "path";
 import { fileURLToPath } from "url";
 import connectDB from "./config/dbConfig.js";
-import passport from './config/passport.js';
+import passport from 'passport';
+import { initializePassport } from './config/passport.js';
 import userRoutes from "./routes/user.js";
 import expenseRoutes from "./routes/expense.js";
 import Category from "./models/Category.js";
@@ -23,6 +24,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = process.env.PORT;
 
+initializePassport();
 app.use(cors());
 app.use(express.json());
 app.use(passport.initialize());
