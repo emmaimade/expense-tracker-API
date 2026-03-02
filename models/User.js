@@ -22,62 +22,65 @@ const userSchema = new mongoose.Schema(
     },
     resetPasswordToken: {
       type: String,
-      select: false
+      select: false,
     },
     resetPasswordExpires: {
       type: Date,
-      select: false
+      select: false,
+    },
+    googleId: {
+      type: String,
+      sparse: true,
     },
     // Email change request fields
     emailChangeRequest: {
       newEmail: {
         type: String,
-        lowercase: true
+        lowercase: true,
       },
       currentEmailToken: {
         type: String,
-        select: false
+        select: false,
       },
       newEmailToken: {
         type: String,
-        select: false
+        select: false,
       },
       currentEmailVerified: {
         type: Boolean,
-        default: false
+        default: false,
       },
       newEmailVerified: {
         type: Boolean,
-        default: false
+        default: false,
       },
       expiresAt: {
-        type: Date
-      }
-    }
-    ,
+        type: Date,
+      },
+    },
     // Preferred currency (ISO 4217 3-letter code). Frontend may set this based on user location
     currency: {
       type: String,
       uppercase: true,
       trim: true,
-      default: 'USD',
+      default: "USD",
       validate: {
-        validator: function(v) {
+        validator: function (v) {
           return /^[A-Z]{3}$/.test(v);
         },
-        message: props => `${props.value} is not a valid currency code (expected 3 uppercase letters)`
-      }
-    }
-    ,
+        message: (props) =>
+          `${props.value} is not a valid currency code (expected 3 uppercase letters)`,
+      },
+    },
     // Record of last currency change (for auditing & troubleshooting)
     lastCurrencyChange: {
       from: { type: String, uppercase: true, trim: true },
       to: { type: String, uppercase: true, trim: true },
       rate: { type: Number },
-      changedAt: { type: Date }
-    }
+      changedAt: { type: Date },
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 // Indexes for better performance on token lookups
