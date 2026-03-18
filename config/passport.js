@@ -16,6 +16,7 @@ export const initializePassport = () => {
           const email = profile.emails[0].value;
           const firstName = profile.name.givenName;
           const lastName = profile.name.familyName;
+          const loginTime = new Date();
 
           let user = await User.findOne({ email });
 
@@ -27,9 +28,13 @@ export const initializePassport = () => {
               password: 'GOOGLE_AUTH_' + Math.random().toString(36),
               currency: 'USD',
               googleId: profile.id,
+              firstLoginAt: loginTime,
+              lastLoginAt: loginTime,
             });
-          } else if (!user.googleId) {
-            user.googleId = profile.id;
+          } else {
+            if (!user.googleId) user.googleId = profile.id;
+            if (!user.firstLoginAt) user.firstLoginAt = loginTime;
+            user.lastLoginAt = loginTime;
             await user.save();
           }
 

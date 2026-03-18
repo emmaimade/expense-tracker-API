@@ -32,6 +32,14 @@ const userSchema = new mongoose.Schema(
       type: String,
       sparse: true,
     },
+    firstLoginAt: {
+      type: Date,
+      default: null,
+    },
+    lastLoginAt: {
+      type: Date,
+      default: null,
+    },
     // Email change request fields
     emailChangeRequest: {
       newEmail: {

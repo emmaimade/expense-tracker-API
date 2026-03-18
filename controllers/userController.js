@@ -111,6 +111,12 @@ const loginUser = async (req, res) => {
     const isPasswordCorrect = await bcrypt.compare(password, user.password);
     if (!isPasswordCorrect) return res.status(401).json({ success: false, message: "Invalid credentials" });
 
+    const loginTime = new Date();
+    const isFirstLogin = !user.firstLoginAt;
+    if (!user.firstLoginAt) user.firstLoginAt = loginTime;
+    user.lastLoginAt = loginTime;
+    await user.save();
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     res.status(200).json({
@@ -121,7 +127,10 @@ const loginUser = async (req, res) => {
         name: `${user.firstName} ${user.lastName}`,
         email: user.email,
         currency: user.currency || 'USD',
+        firstLoginAt: user.firstLoginAt,
+        lastLoginAt: user.lastLoginAt,
       },
+      isFirstLogin,
       token,
     });
   } catch (error) {
@@ -586,6 +595,8 @@ const getCurrentUser = async (req, res) => {
         fullName: `${user.firstName} ${user.lastName}`,
         currency: user.currency || 'USD',
         email: user.email,
+        firstLoginAt: user.firstLoginAt,
+        lastLoginAt: user.lastLoginAt,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         ...(user.emailChangeRequest && user.hasEmailChangeInProgress() && {
