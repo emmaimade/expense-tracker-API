@@ -46,7 +46,7 @@ const addExpense = async (req, res) => {
         message: "Invalid category ID format",
       });
     }
-    const categoryExists = await Category.findById(category);
+    const categoryExists = await Category.findAccessible(category, req.user.id);
     if (!categoryExists) {
       return res.status(404).json({
         success: false,
@@ -388,7 +388,7 @@ const updateExpense = async (req, res) => {
           message: "Invalid category ID format",
         });
       }
-      const categoryExists = await Category.findById(category);
+      const categoryExists = await Category.findAccessible(category, req.user.id);
       if (!categoryExists) {
         return res.status(404).json({
           success: false,
@@ -524,7 +524,7 @@ const exportExpenses = async (req, res) => {
           message: "Invalid category ID format",
         });
       }
-      const categoryExists = await Category.findById(categoryId);
+      const categoryExists = await Category.findAccessible(categoryId, userId);
       if (!categoryExists) {
         return res.status(400).json({
           success: false,
@@ -697,7 +697,7 @@ const exportExpenses = async (req, res) => {
     res.status(500).json({ 
       success: false,
       message: 'Failed to export expenses',
-      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+      error: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 };

@@ -1,5 +1,6 @@
 import Category from "../models/Category.js";
 import Expense from "../models/Expense.js";
+import { escapeRegex } from "../utils/regex.js";
 
 // Add a new category
 const addCategory = async (req, res) => {
@@ -24,11 +25,11 @@ const addCategory = async (req, res) => {
     // Check if category with same name exists for this user or is a default category
     const existingCategory = await Category.findOne({
       $or: [
-        { userId: userId, name: { $regex: `^${name.trim()}$`, $options: "i" } }, // User-specific
+        { userId: userId, name: { $regex: `^${escapeRegex(name.trim())}$`, $options: "i" } }, // User-specific
         {
           userId: null,
           isDefault: true,
-          name: { $regex: `^${name.trim()}$`, $options: "i" },
+          name: { $regex: `^${escapeRegex(name.trim())}$`, $options: "i" },
         }, // Default
       ],
     });
@@ -140,12 +141,12 @@ const updateCategory = async (req, res) => {
         $or: [
           {
             userId: userId,
-            name: { $regex: `^${trimmedName}$`, $options: "i" },
+            name: { $regex: `^${escapeRegex(trimmedName)}$`, $options: "i" },
           }, // User-specific
           {
             userId: null,
             isDefault: true,
-            name: { $regex: `^${trimmedName}$`, $options: "i" },
+            name: { $regex: `^${escapeRegex(trimmedName)}$`, $options: "i" },
           }, // Default
         ],
       });

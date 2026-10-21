@@ -146,13 +146,7 @@ const setMonthlyBudget = async (req, res) => {
     }
 
     // Verify category exists and user has access
-    const category = await Category.findOne({
-      _id: categoryId,
-      $or: [
-        { isDefault: true, userId: null },
-        { userId: userId, isDefault: false }
-      ]
-    });
+    const category = await Category.findAccessible(categoryId, userId);
 
     if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
 

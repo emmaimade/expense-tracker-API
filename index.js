@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
+import helmet from "helmet";
 import bodyParser from "body-parser";
 import swaggerUI from "swagger-ui-express";
 import YAML from "yamljs";
@@ -16,6 +17,7 @@ import Category from "./models/Category.js";
 import categoryRoutes from "./routes/category.js";
 import budgetRoutes from "./routes/budget.js";
 import authRoutes from './routes/auth.js';
+import sanitizeMiddleware from './middleware/sanitizeMiddleware.js';
 
 dotenv.config();
 
@@ -24,11 +26,30 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = process.env.PORT;
 
+// Only allow the frontend (and local dev) to call the API from a browser
+const allowedOrigins = [
+  process.env.FRONTEND_URL?.replace(/\/$/, ""),
+  "http://localhost:5173",
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Requests without an Origin header (curl, server-to-server) are allowed
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    callback(null, false);
+  },
+};
+
+// Render sits behind a proxy; needed so rate limiting sees the real client IP
+app.set("trust proxy", 1);
+
 initializePassport();
-app.use(cors());
+app.use(helmet());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(passport.initialize());
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(sanitizeMiddleware);
 
 // ==============================================
 //  SWAGGER DOCUMENTATION SETUP

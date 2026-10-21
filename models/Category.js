@@ -29,6 +29,17 @@ const categorySchema = new mongoose.Schema(
 categorySchema.index({ name: 1, userId: 1 }, { unique: true });
 categorySchema.index({ userId: 1, isDefault: 1, name: 1 });
 
+// Find a category the user is allowed to use: a default one, or one they own
+categorySchema.statics.findAccessible = function (categoryId, userId) {
+  return this.findOne({
+    _id: categoryId,
+    $or: [
+      { isDefault: true, userId: null },
+      { userId: userId, isDefault: false },
+    ],
+  });
+};
+
 const Category = mongoose.model('Category', categorySchema);
 
 export default Category;
