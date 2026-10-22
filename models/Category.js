@@ -9,7 +9,6 @@ const categorySchema = new mongoose.Schema(
       maxlength: 50,
       required: true,
       trim: true,
-      unique: true,
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -26,6 +25,7 @@ const categorySchema = new mongoose.Schema(
 );
 
 // Ensure unique category names per user and for default categories
+// (names are NOT globally unique - two users can both have "Gym")
 categorySchema.index({ name: 1, userId: 1 }, { unique: true });
 categorySchema.index({ userId: 1, isDefault: 1, name: 1 });
 

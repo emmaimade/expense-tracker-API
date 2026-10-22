@@ -5,6 +5,7 @@ import Expense from "../models/Expense.js";
 import Category from "../models/Category.js";
 import User from "../models/User.js";
 import { getCurrencySymbol } from '../utils/currency.js';
+import { isFutureDate } from '../utils/validators.js';
 
 // Reusable date range function
 // daysOrMonths: Negative for days back (e.g., -7), positive for months back (e.g., 1)
@@ -62,9 +63,7 @@ const addExpense = async (req, res) => {
         message: "Invalid date format",
       });
     }
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    if (parsedDate > today) {
+    if (isFutureDate(parsedDate)) {
       return res.status(400).json({
         success: false,
         message: "Date cannot be in the future",
@@ -371,7 +370,7 @@ const updateExpense = async (req, res) => {
     // Validate amount
     if (amount !== undefined) {
       if (isNaN(amount) || amount <= 0) {
-        return res.status(404).json({
+        return res.status(400).json({
           success: false,
           message: "Amount must be a positive number",
         });
@@ -403,15 +402,13 @@ const updateExpense = async (req, res) => {
     // Validate date
     if (date !== undefined) {
       const parsedDate = new Date(date);
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
       if (isNaN(parsedDate.getTime())) {
         return res.status(400).json({
           success: false,
           message: "Invalid date format",
         });
       }
-      if (parsedDate > today) {
+      if (isFutureDate(parsedDate)) {
         return res.status(400).json({
           success: false,
           message: "Date cannot be in the future",

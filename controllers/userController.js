@@ -1,6 +1,7 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { generateToken, hashToken } from "../utils/tokens.js";
+import { validatePassword } from "../utils/validators.js";
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import { isValidCurrency, getCurrencySymbol } from "../utils/currency.js";
@@ -33,11 +34,9 @@ const registerUser = async (req, res) => {
     if (firstName.trim().length < 2 || lastName.trim().length < 2) {
       return res.status(400).json({ success: false, message: "Firstname or Lastname must be at least 2 characters long" });
     }
-    if (password.length < 6) {
-      return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
-    }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      return res.status(400).json({ success: false, message: "Password must contain at least one lowercase letter, one uppercase letter, and one number" });
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ success: false, message: passwordError });
     }
     if (password !== confirmPassword) {
       return res.status(400).json({ success: false, message: "Passwords do not match" });
@@ -182,8 +181,8 @@ const resetPassword = async (req, res) => {
 
     if (typeof token !== "string" || !token) return res.status(400).json({ success: false, message: "Password reset link is invalid or has expired. Please request a new one." });
     if (!password || !confirmPassword) return res.status(400).json({ success: false, message: "Both fields are required" });
-    if (password.length < 6) return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) return res.status(400).json({ success: false, message: "Password must contain at least one lowercase letter, one uppercase letter, and one number" });
+    const passwordError = validatePassword(password);
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
     if (password !== confirmPassword) return res.status(400).json({ success: false, message: "Passwords do not match" });
 
     const user = await User.findOne({
@@ -409,8 +408,8 @@ const changePassword = async (req, res) => {
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
     if (!currentPassword || !newPassword || !confirmNewPassword) return res.status(400).json({ success: false, message: "All fields are required" });
-    if (newPassword.length < 6) return res.status(400).json({ success: false, message: "New password must be at least 6 characters long" });
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) return res.status(400).json({ success: false, message: "Password must contain at least one lowercase letter, one uppercase letter, and one number" });
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
     if (newPassword !== confirmNewPassword) return res.status(400).json({ success: false, message: "New passwords do not match" });
 
     const user = await User.findById(userId);
