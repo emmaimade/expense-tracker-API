@@ -1,5 +1,7 @@
 import express from "express";
-import { detectCurrency } from "../utils/geoCurrency.js";
+import { detectCurrency, getClientIP } from "../utils/geoCurrency.js";
+import { getCurrencySymbol } from "../utils/currency.js";
+import { authLimiter } from "../middleware/rateLimiter.js";
 
 import {
   registerUser, 
@@ -18,10 +20,10 @@ import authMiddleware from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 // Public routes (no auth required)
-router.post('/register', registerUser);
-router.post('/login', loginUser);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+router.post('/register', authLimiter, registerUser);
+router.post('/login', authLimiter, loginUser);
+router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/reset-password', authLimiter, resetPassword);
 router.get('/verify-email-change/current', verifyCurrentEmail);
 router.get('/verify-email-change/new', verifyNewEmail);
 

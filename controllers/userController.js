@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
+import { generateToken, hashToken } from "../utils/tokens.js";
 import mongoose from "mongoose";
 import User from "../models/User.js";
 import { isValidCurrency, getCurrencySymbol } from "../utils/currency.js";
@@ -154,8 +154,8 @@ const forgotPassword = async (req, res) => {
       return res.status(200).json({ success: true, message: "If an account with that email exists, a password reset link has been sent." });
     }
 
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    user.resetPasswordToken = resetToken;
+    const { raw: resetToken, hash: resetTokenHash } = generateToken();
+    user.resetPasswordToken = resetTokenHash;
     user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 min
     await user.save();
 
@@ -180,13 +180,14 @@ const resetPassword = async (req, res) => {
     const { token } = req.query;
     const { password, confirmPassword } = req.body;
 
+    if (typeof token !== "string" || !token) return res.status(400).json({ success: false, message: "Password reset link is invalid or has expired. Please request a new one." });
     if (!password || !confirmPassword) return res.status(400).json({ success: false, message: "Both fields are required" });
     if (password.length < 6) return res.status(400).json({ success: false, message: "Password must be at least 6 characters long" });
     if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) return res.status(400).json({ success: false, message: "Password must contain at least one lowercase letter, one uppercase letter, and one number" });
     if (password !== confirmPassword) return res.status(400).json({ success: false, message: "Passwords do not match" });
 
     const user = await User.findOne({
-      resetPasswordToken: token,
+      resetPasswordToken: hashToken(token),
       resetPasswordExpires: { $gt: new Date() },
     });
 
@@ -252,14 +253,13 @@ const updateProfile = async (req, res) => {
       const emailExists = await User.findOne({ email });
       if (emailExists) return res.status(400).json({ success: false, message: "Email already in use" });
 
-      const currentEmailToken = crypto.randomBytes(32).toString("hex");
-      const newEmailToken = crypto.randomBytes(32).toString("hex");
+      // The new-email token is generated once the current email is verified
+      const { raw: currentEmailToken, hash: currentEmailTokenHash } = generateToken();
       const tokenExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 min
 
       user.emailChangeRequest = {
         newEmail: email,
-        currentEmailToken,
-        newEmailToken,
+        currentEmailToken: currentEmailTokenHash,
         currentEmailVerified: false,
         newEmailVerified: false,
         expiresAt: tokenExpires,
@@ -319,20 +319,22 @@ const updateProfile = async (req, res) => {
 const verifyCurrentEmail = async (req, res) => {
   try {
     const { token } = req.query;
-    if (!token) return res.status(400).json({ success: false, message: "Verification token is required" });
+    if (typeof token !== "string" || !token) return res.status(400).json({ success: false, message: "Verification token is required" });
 
     const user = await User.findOne({
-      'emailChangeRequest.currentEmailToken': token,
+      'emailChangeRequest.currentEmailToken': hashToken(token),
       'emailChangeRequest.expiresAt': { $gt: new Date() },
-    }).select('+emailChangeRequest.newEmailToken');
+    });
 
     if (!user) return res.status(400).json({ success: false, message: "Invalid or expired verification token" });
 
+    const { raw: newEmailToken, hash: newEmailTokenHash } = generateToken();
     user.emailChangeRequest.currentEmailVerified = true;
+    user.emailChangeRequest.newEmailToken = newEmailTokenHash;
     await user.save();
 
     try {
-      const verifyUrl = `${process.env.BASE_URL}/user/verify-email-change/new?token=${user.emailChangeRequest.newEmailToken}`;
+      const verifyUrl = `${process.env.BASE_URL}/user/verify-email-change/new?token=${newEmailToken}`;
       await sendEmail({
         to: user.emailChangeRequest.newEmail,
         subject: "Verify Your New Email Address",
@@ -359,10 +361,10 @@ const verifyCurrentEmail = async (req, res) => {
 const verifyNewEmail = async (req, res) => {
   try {
     const { token } = req.query;
-    if (!token) return res.status(400).json({ success: false, message: "Verification token is required" });
+    if (typeof token !== "string" || !token) return res.status(400).json({ success: false, message: "Verification token is required" });
 
     const user = await User.findOne({
-      'emailChangeRequest.newEmailToken': token,
+      'emailChangeRequest.newEmailToken': hashToken(token),
       'emailChangeRequest.currentEmailVerified': true,
       'emailChangeRequest.expiresAt': { $gt: new Date() },
     });
