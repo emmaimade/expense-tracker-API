@@ -81,7 +81,7 @@ const getCategories = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      messageg: "Categories retrieved successfully",
+      message: "Categories retrieved successfully",
       data: categories,
       counts: {
         total: categories.length,

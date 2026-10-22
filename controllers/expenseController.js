@@ -106,13 +106,6 @@ const getExpenses = async (req, res) => {
       .sort({ date: -1 })
       .populate("category", "name isDefault");
 
-    if (expenses.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No expenses found",
-      });
-    }
-
     const totalExpenses = expenses.reduce(
       (total, expense) => total + expense.amount,
       0
@@ -150,13 +143,6 @@ const getPastWeekExpenses = async (req, res) => {
     })
       .sort({ date: -1 })
       .populate("category", "name isDefault");
-
-    if (expenses.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No expenses found",
-      });
-    }
 
     const totalExpenses = expenses.reduce(
       (total, expense) => total + expense.amount,
@@ -196,13 +182,6 @@ const getPastMonthExpenses = async (req, res) => {
       .sort({ date: -1 })
       .populate("category", "name isDefault");
 
-    if (expenses.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No expenses found",
-      });
-    }
-
     const totalExpenses = expenses.reduce(
       (total, expense) => total + expense.amount,
       0
@@ -240,13 +219,6 @@ const getThreeMonthsExpenses = async (req, res) => {
     })
       .sort({ date: -1 })
       .populate("category", "name isDefault");
-
-    if (expenses.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No expenses found",
-      });
-    }
 
     const totalExpenses = expenses.reduce(
       (total, expense) => total + expense.amount,
@@ -310,13 +282,6 @@ const getCustomExpenses = async (req, res) => {
     })
       .sort({ date: -1 })
       .populate("category", "name isDefault");
-
-    if (expenses.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No expenses found",
-      });
-    }
 
     const totalExpenses = expenses.reduce(
       (total, expense) => total + expense.amount,
@@ -496,16 +461,16 @@ const exportExpenses = async (req, res) => {
 
     // Validate parsed dates
     if (isNaN(parsedStartDate.getTime()) || isNaN(parsedEndDate.getTime())) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Invalid date format. Use YYYY-MM-DD format.' 
+        message: 'Invalid date format. Use YYYY-MM-DD format.'
       });
     }
 
     if (parsedStartDate > parsedEndDate) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: 'Start date must be before or equal to end date' 
+        message: 'Start date must be before or equal to end date'
       });
     }
 
@@ -543,7 +508,7 @@ const exportExpenses = async (req, res) => {
     if (!expenses.length) {
       return res.status(404).json({
         success: false,
-        error: 'No expenses found for the specified date range and filters',
+        message: 'No expenses found for the specified date range and filters',
       });
     }
 
