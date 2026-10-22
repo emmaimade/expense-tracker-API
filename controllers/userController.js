@@ -23,6 +23,25 @@ import {
   currencyUpdatedEmail,
 } from "../utils/emailTemplates.js";
 
+// Shared user shape for register, login, /me and profile updates.
+// `name` is kept alongside `fullName` for older frontend builds.
+const formatUser = (user) => {
+  const fullName = `${user.firstName} ${user.lastName}`;
+  const currency = user.currency || "USD";
+  return {
+    id: user._id,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    fullName,
+    name: fullName,
+    email: user.email,
+    currency,
+    currencySymbol: getCurrencySymbol(currency),
+    firstLoginAt: user.firstLoginAt,
+    lastLoginAt: user.lastLoginAt,
+  };
+};
+
 // ── Register ──────────────────────────────────────────────────────
 const registerUser = async (req, res) => {
   const { firstName, lastName, email, password, confirmPassword, currency } = req.body;
@@ -79,14 +98,7 @@ const registerUser = async (req, res) => {
     res.status(201).json({
       success: true,
       message: "User created successfully",
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        currency: user.currency,
-        currencySymbol: getCurrencySymbol(user.currency),
-      },
+      user: formatUser(user),
       token,
     });
   } catch (error) {
@@ -121,14 +133,7 @@ const loginUser = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Login successful",
-      user: {
-        id: user._id,
-        name: `${user.firstName} ${user.lastName}`,
-        email: user.email,
-        currency: user.currency || 'USD',
-        firstLoginAt: user.firstLoginAt,
-        lastLoginAt: user.lastLoginAt,
-      },
+      user: formatUser(user),
       isFirstLogin,
       token,
     });
@@ -301,10 +306,7 @@ const updateProfile = async (req, res) => {
         ? "Email change initiated. Please check your current email to verify and proceed."
         : "Profile updated successfully",
       user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
+        ...formatUser(user),
         ...(user.emailChangeRequest && { emailChangeInProgress: true, newEmailPending: user.emailChangeRequest.newEmail }),
       },
     });
@@ -590,14 +592,7 @@ const getCurrentUser = async (req, res) => {
     res.status(200).json({
       success: true,
       user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: `${user.firstName} ${user.lastName}`,
-        currency: user.currency || 'USD',
-        email: user.email,
-        firstLoginAt: user.firstLoginAt,
-        lastLoginAt: user.lastLoginAt,
+        ...formatUser(user),
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
         ...(user.emailChangeRequest && user.hasEmailChangeInProgress() && {

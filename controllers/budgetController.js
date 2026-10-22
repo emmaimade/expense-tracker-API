@@ -138,11 +138,11 @@ const setMonthlyBudget = async (req, res) => {
     }
 
     if (month < 1 || month > 12) {
-      return res.status(400).json({ message: 'Month must be between 1 and 12' });
+      return res.status(400).json({ success: false, message: 'Month must be between 1 and 12' });
     }
 
     if (year < 2020 || year > 2030) {
-      return res.status(400).json({ message: 'Year must be between 2020 and 2030' });
+      return res.status(400).json({ success: false, message: 'Year must be between 2020 and 2030' });
     }
 
     // Verify category exists and user has access

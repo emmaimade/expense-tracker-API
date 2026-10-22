@@ -70,6 +70,10 @@ components:
           type: string
           description: Computed full name (firstName + lastName)
           example: "John Doe"
+        name:
+          type: string
+          description: Same as fullName (kept for backwards compatibility)
+          example: "John Doe"
         email:
           type: string
           format: email
@@ -79,6 +83,22 @@ components:
           type: string
           description: "Preferred currency (ISO 4217 3-letter code)"
           example: "USD"
+        currencySymbol:
+          type: string
+          description: Display symbol for the preferred currency
+          example: "$"
+        firstLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: First successful login
+          example: "2025-10-06T10:31:00.000Z"
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Most recent successful login
+          example: "2025-10-08T09:15:00.000Z"
         createdAt:
           type: string
           format: date-time
@@ -2741,14 +2761,14 @@ paths:
       tags:
         - Budgets
       summary: Get budget trends
-      description: Retrieve budget trends over a specified period (default: last 6 months)
+      description: "Retrieve budget trends over a specified period (default: last 6 months)"
       security:
         - bearerAuth: []
       parameters:
         - name: months
           in: query
           required: false
-          description: Number of months to analyze (default: 6)
+          description: "Number of months to analyze (default: 6)"
           schema:
             type: integer
             minimum: 1
