@@ -87,6 +87,12 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
    npm run dev
    ```
 
+5. **Run the tests:**
+   ```bash
+   npm test
+   ```
+   Tests use an in-memory MongoDB and stub all email sending, so they never touch your real database or send emails. The first run downloads a MongoDB binary, which can take a few minutes. Tests also run automatically on every pull request (GitHub Actions).
+
 ---
 
 ## 🧪 API Endpoints
