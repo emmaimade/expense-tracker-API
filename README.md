@@ -62,12 +62,25 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
 
    ```env
    PORT=3000
-   MONGODB_URI=your_db_uri
+   DB_URI=your_mongodb_connection_string
    JWT_SECRET=your_jwt_secret
-   EMAIL_USER=your_email_user
-   EMAIL_PASS=your_email_pass
-   BASE_URL=[https://expense-tracker-api-hvss.onrender.com](https://expense-tracker-api-hvss.onrender.com)
+
+   # URLs
+   BASE_URL=http://localhost:3000          # this API's public URL
+   FRONTEND_URL=http://localhost:5173      # allowed by CORS, used in email links
+
+   # Google OAuth
+   GOOGLE_CLIENT_ID=your_google_client_id
+   GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+   # Email - pick one provider
+   EMAIL_PROVIDER=brevo                    # or "resend"
+   EMAIL_FROM="SpendWise <you@gmail.com>"  # Brevo: a verified sender; Resend: an address on your verified domain
+   BREVO_API_KEY=your_brevo_api_key        # if EMAIL_PROVIDER=brevo
+   RESEND_API_KEY=your_resend_api_key      # if EMAIL_PROVIDER=resend
    ```
+
+   > **Email without a domain:** Resend only delivers to your own address until you verify a domain. Brevo's free plan can send from a single verified address (e.g. your Gmail) - some messages may land in spam until you switch to a custom domain.
 
 4. **Start the server:**
    ```bash
