@@ -32,6 +32,21 @@ const userSchema = new mongoose.Schema(
       type: String,
       sparse: true,
     },
+    // Defaults to true so accounts created before verification existed (and
+    // Google sign-ups, already verified by Google) count as verified.
+    // Email/password registrations set this to false explicitly.
+    emailVerified: {
+      type: Boolean,
+      default: true,
+    },
+    emailVerificationToken: {
+      type: String,
+      select: false,
+    },
+    emailVerificationExpires: {
+      type: Date,
+      select: false,
+    },
     firstLoginAt: {
       type: Date,
       default: null,
@@ -96,6 +111,7 @@ userSchema.index({ 'emailChangeRequest.currentEmailToken': 1 });
 userSchema.index({ 'emailChangeRequest.newEmailToken': 1 });
 userSchema.index({ 'emailChangeRequest.expiresAt': 1 });
 userSchema.index({ resetPasswordToken: 1 });
+userSchema.index({ emailVerificationToken: 1 });
 
 // Method to check if email change is in progress
 userSchema.methods.hasEmailChangeInProgress = function() {

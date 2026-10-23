@@ -99,6 +99,10 @@ components:
           nullable: true
           description: Most recent successful login
           example: "2025-10-08T09:15:00.000Z"
+        emailVerified:
+          type: boolean
+          description: Whether the user has confirmed their email address
+          example: true
         createdAt:
           type: string
           format: date-time
@@ -1765,6 +1769,97 @@ paths:
                     message: "Passwords do not match"
         '500':
           description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/verify-email:
+    post:
+      tags:
+        - Email Verification
+      summary: Confirm email address
+      description: |
+        Confirm a new account's email address using the token from the
+        confirmation email (the link opens `FRONTEND_URL/verify-email?token=...`,
+        which calls this endpoint). Sends the welcome email on success.
+
+        - Tokens expire after 24 hours and can be used once
+        - Accounts created before email verification existed, and Google
+          sign-ups, are already verified
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: Token from the confirmation link
+      responses:
+        '200':
+          description: Email confirmed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Email confirmed. Welcome to SpendWise!"
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          description: Missing, invalid, used or expired token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/resend-verification:
+    post:
+      tags:
+        - Email Verification
+      summary: Resend the confirmation email
+      description: |
+        Send a new confirmation link to the signed-in user. Any previous link
+        stops working. Rate limited together with the other auth endpoints.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Confirmation email sent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          description: Email already confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests
+        '500':
+          description: The email could not be sent
           content:
             application/json:
               schema:
