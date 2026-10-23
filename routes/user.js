@@ -13,7 +13,9 @@ import {
   verifyNewEmail,
   changePassword,
   updateCurrency,
-  getCurrentUser
+  getCurrentUser,
+  verifyEmail,
+  resendVerification
 } from "../controllers/userController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
@@ -26,6 +28,7 @@ router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password', authLimiter, resetPassword);
 router.get('/verify-email-change/current', verifyCurrentEmail);
 router.get('/verify-email-change/new', verifyNewEmail);
+router.post('/verify-email', verifyEmail);
 
 // NEW: Currency detection endpoint (no auth needed - for registration)
 router.get('/detect-currency', (req, res) => {
@@ -54,5 +57,6 @@ router.get('/me', authMiddleware, getCurrentUser);
 router.put('/profile', authMiddleware, updateProfile);
 router.put('/currency', authMiddleware, updateCurrency);
 router.put('/change-password', authMiddleware, changePassword);
+router.post('/resend-verification', authMiddleware, authLimiter, resendVerification);
 
 export default router;

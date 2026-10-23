@@ -88,6 +88,31 @@ export const forgotPasswordEmail = ({ firstName, resetUrl }) =>
     <p style="color:#4b5563; margin-top:24px;">Best regards,<br><strong>The SpendWise Team</strong></p>
   `);
 
+export const verifyEmailEmail = ({ firstName, verifyUrl }) =>
+  emailWrapper(`
+    <h2 style="color:#111827; font-size:20px; margin:0 0 12px;">Confirm your email address</h2>
+    <p style="color:#4b5563; line-height:1.6;">Hello ${firstName},</p>
+    <p style="color:#4b5563; line-height:1.6;">Thanks for signing up for SpendWise! Please confirm this is your email address so we can keep your account secure and send you important updates.</p>
+
+    <div style="text-align:center; margin:32px 0;">
+      <a href="${verifyUrl}"
+         style="background:linear-gradient(135deg,#3b82f6,#6366f1); color:white; padding:14px 36px;
+                text-decoration:none; border-radius:8px; display:inline-block; font-weight:700; font-size:15px;">
+        Confirm Email
+      </a>
+    </div>
+
+    <p style="color:#6b7280; font-size:13px;">Or copy and paste this link into your browser:</p>
+    <p style="background:#f3f4f6; padding:12px; border-radius:6px; word-break:break-all; font-size:13px; color:#4b5563;">${verifyUrl}</p>
+
+    <div style="background:#eff6ff; border-left:4px solid #3b82f6; padding:14px; border-radius:0 8px 8px 0; margin:20px 0;">
+      <p style="margin:0; color:#1e40af; font-size:14px;">This link expires in <strong>24 hours</strong>. You can request a new one from your dashboard.</p>
+    </div>
+
+    <p style="color:#4b5563; font-size:14px; line-height:1.6;">If you didn't create a SpendWise account, you can safely ignore this email.</p>
+    <p style="color:#4b5563; margin-top:24px;">Best regards,<br><strong>The SpendWise Team</strong></p>
+  `);
+
 export const resetPasswordConfirmEmail = ({ firstName, email }) =>
   emailWrapper(`
     <h2 style="color:#111827; font-size:20px; margin:0 0 12px;">✓ Password Successfully Reset</h2>

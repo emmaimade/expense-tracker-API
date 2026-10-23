@@ -12,6 +12,7 @@ import Budget from '../models/Budget.js';
 import sendEmail from "../utils/email.js";
 import {
   welcomeEmail,
+  verifyEmailEmail,
   forgotPasswordEmail,
   resetPasswordConfirmEmail,
   profileUpdatedEmail,
@@ -39,7 +40,29 @@ const formatUser = (user) => {
     currencySymbol: getCurrencySymbol(currency),
     firstLoginAt: user.firstLoginAt,
     lastLoginAt: user.lastLoginAt,
+    emailVerified: user.emailVerified !== false,
   };
+};
+
+const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Only send optional notification emails to confirmed addresses, so typos
+// and fake sign-ups don't cause bounces that hurt our sender reputation
+const canEmail = (user) => user.emailVerified !== false;
+
+// Save a new verification token on the user and email the confirmation link
+const sendVerificationEmail = async (user) => {
+  const { raw, hash } = generateToken();
+  user.emailVerificationToken = hash;
+  user.emailVerificationExpires = new Date(Date.now() + VERIFICATION_TTL_MS);
+  await user.save();
+
+  const verifyUrl = `${process.env.FRONTEND_URL}/verify-email?token=${raw}`;
+  await sendEmail({
+    to: user.email,
+    subject: "Confirm your SpendWise email",
+    html: verifyEmailEmail({ firstName: user.firstName, verifyUrl }),
+  });
 };
 
 // ── Register ──────────────────────────────────────────────────────
@@ -75,24 +98,18 @@ const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const userCurrency = currency.toUpperCase();
 
-    const user = await User.create({ firstName, lastName, email, password: hashedPassword, currency: userCurrency });
+    const user = await User.create({
+      firstName, lastName, email, password: hashedPassword, currency: userCurrency, emailVerified: false,
+    });
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
-    // Send welcome email
+    // Ask the user to confirm their address; the welcome email follows once they do.
+    // A failure here doesn't block sign-up - they can resend from the dashboard.
     try {
-      await sendEmail({
-        to: email,
-        subject: "Welcome to SpendWise!",
-        html: welcomeEmail({
-          firstName,
-          email,
-          userCurrency,
-          currencySymbol: getCurrencySymbol(userCurrency),
-        }),
-      });
+      await sendVerificationEmail(user);
     } catch (emailError) {
-      console.error("Error sending welcome email:", emailError);
+      console.error("Error sending verification email:", emailError);
     }
 
     res.status(201).json({
@@ -202,6 +219,8 @@ const resetPassword = async (req, res) => {
     user.password = await bcrypt.hash(password, 10);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
+    // Using the emailed reset link proves the user owns this address
+    user.emailVerified = true;
     await user.save();
 
     // Send confirmation email
@@ -288,7 +307,7 @@ const updateProfile = async (req, res) => {
     await user.save();
 
     // Send profile update confirmation (only for non-email changes)
-    if (!changes.includes("Email change initiated - check your current email")) {
+    if (!changes.includes("Email change initiated - check your current email") && canEmail(user)) {
       try {
         await sendEmail({
           to: user.email,
@@ -377,6 +396,8 @@ const verifyNewEmail = async (req, res) => {
 
     user.email = newEmail;
     user.emailChangeRequest = undefined;
+    // The new address was confirmed by clicking the link sent to it
+    user.emailVerified = true;
     await user.save();
 
     try {
@@ -426,14 +447,16 @@ const changePassword = async (req, res) => {
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
 
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: "Password Changed Successfully",
-        html: passwordChangedEmail({ firstName: user.firstName, email: user.email }),
-      });
-    } catch (emailError) {
-      console.error("Error sending password change email:", emailError);
+    if (canEmail(user)) {
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "Password Changed Successfully",
+          html: passwordChangedEmail({ firstName: user.firstName, email: user.email }),
+        });
+      } catch (emailError) {
+        console.error("Error sending password change email:", emailError);
+      }
     }
 
     res.status(200).json({ success: true, message: "Password changed successfully" });
@@ -535,7 +558,7 @@ const updateCurrency = async (req, res) => {
     };
     await user.save();
 
-    if (shouldConvert && hasExistingData) {
+    if (shouldConvert && hasExistingData && canEmail(user)) {
       try {
         await sendEmail({
           to: user.email,
@@ -579,6 +602,77 @@ const updateCurrency = async (req, res) => {
   }
 };
 
+// ── Verify Email ──────────────────────────────────────────────────
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (typeof token !== "string" || !token) {
+      return res.status(400).json({ success: false, message: "Verification token is required" });
+    }
+
+    const user = await User.findOne({
+      emailVerificationToken: hashToken(token),
+      emailVerificationExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "This confirmation link is invalid, already used, or expired.",
+      });
+    }
+
+    user.emailVerified = true;
+    user.emailVerificationToken = undefined;
+    user.emailVerificationExpires = undefined;
+    await user.save();
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Welcome to SpendWise!",
+        html: welcomeEmail({
+          firstName: user.firstName,
+          email: user.email,
+          userCurrency: user.currency,
+          currencySymbol: getCurrencySymbol(user.currency),
+        }),
+      });
+    } catch (emailError) {
+      console.error("Error sending welcome email:", emailError);
+    }
+
+    res.status(200).json({ success: true, message: "Email confirmed. Welcome to SpendWise!", user: formatUser(user) });
+  } catch (error) {
+    console.error("Error verifying email:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// ── Resend Verification Email ─────────────────────────────────────
+const resendVerification = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    if (user.emailVerified !== false) {
+      return res.status(400).json({ success: false, message: "Your email is already confirmed" });
+    }
+
+    try {
+      await sendVerificationEmail(user);
+    } catch (emailError) {
+      console.error("Error resending verification email:", emailError);
+      return res.status(500).json({ success: false, message: "Couldn't send the confirmation email. Please try again later." });
+    }
+
+    res.status(200).json({ success: true, message: `Confirmation email sent to ${user.email}` });
+  } catch (error) {
+    console.error("Error resending verification email:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
 // ── Get Current User ──────────────────────────────────────────────
 const getCurrentUser = async (req, res) => {
   try {
@@ -619,4 +713,6 @@ export {
   changePassword,
   updateCurrency,
   getCurrentUser,
+  verifyEmail,
+  resendVerification,
 };

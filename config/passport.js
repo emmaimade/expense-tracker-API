@@ -33,6 +33,7 @@ export const initializePassport = () => {
             });
           } else {
             if (!user.googleId) user.googleId = profile.id;
+            user.emailVerified = true;
             if (!user.firstLoginAt) user.firstLoginAt = loginTime;
             user.lastLoginAt = loginTime;
             await user.save();

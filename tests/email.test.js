@@ -78,9 +78,9 @@ describe("configuration", () => {
 });
 
 describe("email flows through the API", () => {
-  it("sends a welcome email on register", async () => {
+  it("sends a confirmation email (not the welcome email) on register", async () => {
     await createUser(ctx.api);
-    assert.equal(sentEmails.at(-1).body.subject, "Welcome to SpendWise!");
+    assert.equal(sentEmails.at(-1).body.subject, "Confirm your SpendWise email");
   });
 
   it("sends a reset link built from FRONTEND_URL", async () => {
