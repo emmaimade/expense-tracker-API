@@ -89,14 +89,15 @@ export function getCurrencyFromIP(ipAddress) {
     const geo = geoip.lookup(ipAddress);
     
     if (!geo || !geo.country) {
-      console.log('No geo data found for IP:', ipAddress);
+      // IP addresses are personal data - don't write them to the logs
+      console.log('No geo data found for this IP');
       return 'USD'; // Fallback to USD
     }
 
     const countryCode = geo.country;
     const currency = COUNTRY_TO_CURRENCY[countryCode] || 'USD';
     
-    console.log(`IP ${ipAddress} -> Country: ${countryCode} -> Currency: ${currency}`);
+    console.log(`Country: ${countryCode} -> Currency: ${currency}`);
     return currency;
   } catch (error) {
     console.error('Error detecting currency from IP:', error);

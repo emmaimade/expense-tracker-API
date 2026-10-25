@@ -9,6 +9,7 @@ import { getConversionRate } from '../utils/exchange.js';
 import { detectCurrency } from '../utils/geoCurrency.js';
 import Expense from '../models/Expense.js';
 import Budget from '../models/Budget.js';
+import Category from '../models/Category.js';
 import sendEmail from "../utils/email.js";
 import {
   welcomeEmail,
@@ -22,6 +23,7 @@ import {
   emailChangedOldAddressNotification,
   passwordChangedEmail,
   currencyUpdatedEmail,
+  accountDeletedEmail,
 } from "../utils/emailTemplates.js";
 
 // Shared user shape for register, login, /me and profile updates.
@@ -41,8 +43,13 @@ const formatUser = (user) => {
     firstLoginAt: user.firstLoginAt,
     lastLoginAt: user.lastLoginAt,
     emailVerified: user.emailVerified !== false,
+    hasPassword: hasPassword(user),
   };
 };
+
+// Accounts created through Google store a random placeholder, not a bcrypt
+// hash, so they have no password the user knows
+const hasPassword = (user) => typeof user.password === "string" && /^\$2[aby]\$\d{2}\$/.test(user.password);
 
 const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -673,11 +680,70 @@ const resendVerification = async (req, res) => {
   }
 };
 
+// ── Delete Account ────────────────────────────────────────────────
+// Permanently deletes the user and everything they own. Password accounts
+// confirm with their password; Google-only accounts type "DELETE".
+const deleteAccount = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    const { password, confirmation } = req.body || {};
+    if (hasPassword(user)) {
+      if (typeof password !== "string" || !password) {
+        return res.status(400).json({ success: false, message: "Please enter your password to confirm" });
+      }
+      if (!(await bcrypt.compare(password, user.password))) {
+        return res.status(401).json({ success: false, message: "Password is incorrect" });
+      }
+    } else if (confirmation !== "DELETE") {
+      return res.status(400).json({ success: false, message: 'Type "DELETE" to confirm' });
+    }
+
+    const { email, firstName } = user;
+    const notify = canEmail(user);
+
+    // Delete owned data first and the user last, so a failure part-way
+    // through leaves an account the user can retry deleting from
+    const [expenses, budgets, categories] = await Promise.all([
+      Expense.deleteMany({ userId: user._id }),
+      Budget.deleteMany({ userId: user._id }),
+      Category.deleteMany({ userId: user._id, isDefault: false }),
+    ]);
+    await User.deleteOne({ _id: user._id });
+
+    if (notify) {
+      try {
+        await sendEmail({
+          to: email,
+          subject: "Your SpendWise account has been deleted",
+          html: accountDeletedEmail({ firstName }),
+        });
+      } catch (emailError) {
+        console.error("Error sending account deletion email:", emailError);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Your account and all of your data have been permanently deleted",
+      deleted: {
+        expenses: expenses.deletedCount,
+        budgets: budgets.deletedCount,
+        categories: categories.deletedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error deleting account:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
 // ── Get Current User ──────────────────────────────────────────────
 const getCurrentUser = async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await User.findById(userId).select('-password');
+    const user = await User.findById(userId);
 
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
@@ -715,4 +781,5 @@ export {
   getCurrentUser,
   verifyEmail,
   resendVerification,
+  deleteAccount,
 };

@@ -113,6 +113,24 @@ export const verifyEmailEmail = ({ firstName, verifyUrl }) =>
     <p style="color:#4b5563; margin-top:24px;">Best regards,<br><strong>The SpendWise Team</strong></p>
   `);
 
+export const accountDeletedEmail = ({ firstName }) =>
+  emailWrapper(`
+    <h2 style="color:#111827; font-size:20px; margin:0 0 12px;">Your account has been deleted</h2>
+    <p style="color:#4b5563; line-height:1.6;">Hello ${firstName},</p>
+    <p style="color:#4b5563; line-height:1.6;">As requested, your SpendWise account has been permanently deleted, along with all of your expenses, budgets and custom categories.</p>
+
+    <div style="background:#fffbeb; border-left:4px solid #f59e0b; padding:14px; border-radius:0 8px 8px 0; margin:20px 0;">
+      <p style="margin:0; color:#92400e; font-size:14px;">
+        <strong>Didn't do this?</strong><br>
+        Someone may have had access to your account. Contact us at
+        <a href="mailto:emmaimade14@gmail.com" style="color:#92400e;">emmaimade14@gmail.com</a> so we can look into it.
+      </p>
+    </div>
+
+    <p style="color:#4b5563; line-height:1.6;">Thank you for using SpendWise. You're welcome back any time.</p>
+    <p style="color:#4b5563; margin-top:24px;">Best regards,<br><strong>The SpendWise Team</strong></p>
+  `);
+
 export const resetPasswordConfirmEmail = ({ firstName, email }) =>
   emailWrapper(`
     <h2 style="color:#111827; font-size:20px; margin:0 0 12px;">✓ Password Successfully Reset</h2>
