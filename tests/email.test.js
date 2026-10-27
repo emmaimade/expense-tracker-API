@@ -1,7 +1,10 @@
 import { describe, it, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { setupApp, createUser, sentEmails, setEmailReply } from "./helpers.js";
-import sendEmail, { parseAddress } from "../utils/email.js";
+import { setupApp, createUser, sentEmails, setEmailReply, tokenRequests, setTokenReply } from "./helpers.js";
+import sendEmail, { parseAddress, buildMimeMessage, resetGmailTokenCache } from "../utils/email.js";
+
+/** Decode the base64url `raw` MIME message the Gmail API receives. */
+const decodeRaw = (raw) => Buffer.from(raw, "base64url").toString("utf8");
 
 const message = { to: "user@example.com", subject: "Hello", html: "<p>Hi</p>" };
 
@@ -58,6 +61,70 @@ describe("Resend provider", () => {
     process.env.EMAIL_PROVIDER = "resend";
     setEmailReply(403, { statusCode: 403, name: "validation_error", message: "You can only send testing emails to your own email address" });
     await assert.rejects(sendEmail(message), /Resend failed.*own email address/);
+  });
+});
+
+describe("Gmail provider", () => {
+  beforeEach(() => {
+    process.env.EMAIL_PROVIDER = "gmail";
+    process.env.EMAIL_FROM = "SpendWise <sender@gmail.com>";
+    Object.assign(process.env, { GMAIL_CLIENT_ID: "gid", GMAIL_CLIENT_SECRET: "gsecret", GMAIL_REFRESH_TOKEN: "grefresh" });
+    resetGmailTokenCache();
+    tokenRequests.length = 0;
+    setTokenReply(200, { access_token: "test-access-token", expires_in: 3600 });
+    setEmailReply(200, { id: "gmail-msg-1" });
+  });
+
+  it("exchanges the refresh token, then sends a MIME message", async () => {
+    await sendEmail(message);
+
+    assert.deepEqual(tokenRequests[0], {
+      client_id: "gid", client_secret: "gsecret", refresh_token: "grefresh", grant_type: "refresh_token",
+    });
+    const [call] = sentEmails;
+    assert.equal(call.url, "https://gmail.googleapis.com/gmail/v1/users/me/messages/send");
+    assert.equal(call.headers.authorization, "Bearer test-access-token");
+
+    const mime = decodeRaw(call.body.raw);
+    assert.match(mime, /^From: SpendWise <sender@gmail\.com>\r\n/);
+    assert.match(mime, /\r\nTo: user@example\.com\r\n/);
+    assert.match(mime, /\r\nSubject: Hello\r\n/);
+    assert.match(mime, /\r\nContent-Type: text\/html; charset=UTF-8\r\n/);
+    const body = mime.split("\r\n\r\n")[1].replace(/\r\n/g, "");
+    assert.equal(Buffer.from(body, "base64").toString("utf8"), message.html);
+  });
+
+  it("reuses the access token until it expires", async () => {
+    await sendEmail(message);
+    await sendEmail(message);
+    assert.equal(tokenRequests.length, 1);
+    assert.equal(sentEmails.length, 2);
+  });
+
+  it("reports an expired or revoked refresh token clearly", async () => {
+    setTokenReply(400, { error: "invalid_grant", error_description: "Token has been expired or revoked." });
+    await assert.rejects(sendEmail(message), /Gmail authorization failed \(400\): Token has been expired or revoked/);
+    assert.equal(sentEmails.length, 0);
+  });
+
+  it("throws with Gmail's message when sending fails", async () => {
+    setEmailReply(403, { error: { code: 403, message: "Daily sending quota exceeded" } });
+    await assert.rejects(sendEmail(message), /Gmail failed to send email \(403\): Daily sending quota exceeded/);
+  });
+
+  it("encodes non-English subjects and display names", () => {
+    const mime = buildMimeMessage({ from: "Dépenses <a@gmail.com>", to: "b@test.io", subject: "Résumé ✓", html: "x" });
+    assert.match(mime, /^From: =\?UTF-8\?B\?[A-Za-z0-9+/=]+\?= <a@gmail\.com>/);
+    const encodedSubject = mime.match(/Subject: =\?UTF-8\?B\?([A-Za-z0-9+/=]+)\?=/)[1];
+    assert.equal(Buffer.from(encodedSubject, "base64").toString("utf8"), "Résumé ✓");
+  });
+
+  it("refuses header injection through line breaks", async () => {
+    await assert.rejects(
+      sendEmail({ ...message, to: "victim@test.io\r\nBcc: attacker@evil.io" }),
+      /Invalid email header value/
+    );
+    assert.equal(sentEmails.length, 0, "nothing was sent");
   });
 });
 

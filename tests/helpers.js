@@ -21,24 +21,37 @@ const TEST_ENV = {
 };
 
 // ── Email stub ───────────────────────────────────────────────────
-// Records calls to Brevo/Resend and answers with `emailReply`;
-// every other request goes to the real fetch.
+// Records calls to Brevo/Resend/Gmail and answers with `emailReply`
+// (Google's token endpoint answers with `tokenReply`); every other
+// request goes to the real fetch.
 export const sentEmails = [];
+export const tokenRequests = [];
 let emailReply = { status: 201, body: { messageId: "<test@brevo>" } };
+let tokenReply = { status: 200, body: { access_token: "test-access-token", expires_in: 3600 } };
 
 export const setEmailReply = (status, body) => {
   emailReply = { status, body };
 };
 
+export const setTokenReply = (status, body) => {
+  tokenReply = { status, body };
+};
+
+const jsonResponse = ({ status, body }) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (url, options = {}) => {
   const target = String(url);
-  if (/api\.(brevo|resend)\.com/.test(target)) {
-    sentEmails.push({ url: target, headers: Object.fromEntries(new Headers(options.headers).entries()), body: JSON.parse(options.body) });
-    return new Response(JSON.stringify(emailReply.body), {
-      status: emailReply.status,
-      headers: { "content-type": "application/json" },
-    });
+  const headers = Object.fromEntries(new Headers(options.headers).entries());
+
+  if (target.startsWith("https://oauth2.googleapis.com/token")) {
+    tokenRequests.push(Object.fromEntries(new URLSearchParams(String(options.body))));
+    return jsonResponse(tokenReply);
+  }
+  if (/api\.(brevo|resend)\.com|gmail\.googleapis\.com/.test(target)) {
+    sentEmails.push({ url: target, headers, body: JSON.parse(options.body) });
+    return jsonResponse(emailReply);
   }
   return realFetch(url, options);
 };

@@ -7,7 +7,8 @@
     "dev": "nodemon index.js",
     "start": "node index.js",
     "migrate:backfill-originals": "node scripts/backfill-originals.js",
-    "migrate:category-index": "node scripts/fix-category-index.js"
+    "migrate:category-index": "node scripts/fix-category-index.js",
+    "gmail:auth": "node scripts/gmail-auth.js"
   },
   "keywords": [],
   "author": "",
