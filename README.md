@@ -74,13 +74,16 @@ A RESTful API built with Node.js, Express, and MongoDB that allows authenticated
    GOOGLE_CLIENT_SECRET=your_google_client_secret
 
    # Email - pick one provider
-   EMAIL_PROVIDER=brevo                    # or "resend"
-   EMAIL_FROM="SpendWise <you@gmail.com>"  # Brevo: a verified sender; Resend: an address on your verified domain
-   BREVO_API_KEY=your_brevo_api_key        # if EMAIL_PROVIDER=brevo
+   EMAIL_PROVIDER=gmail                    # or "resend" / "brevo"
+   EMAIL_FROM="SpendWise <you@gmail.com>"  # Gmail: the authorized Gmail address; Resend/Brevo: an address on your verified domain
+   GMAIL_CLIENT_ID=your_client_id          # if EMAIL_PROVIDER=gmail
+   GMAIL_CLIENT_SECRET=your_client_secret  # if EMAIL_PROVIDER=gmail
+   GMAIL_REFRESH_TOKEN=your_refresh_token  # if EMAIL_PROVIDER=gmail - from `npm run gmail:auth`
    RESEND_API_KEY=your_resend_api_key      # if EMAIL_PROVIDER=resend
+   BREVO_API_KEY=your_brevo_api_key        # if EMAIL_PROVIDER=brevo
    ```
 
-   > **Email without a domain:** Resend only delivers to your own address until you verify a domain. Brevo's free plan can send from a single verified address (e.g. your Gmail) - some messages may land in spam until you switch to a custom domain.
+   > **Email without a domain:** Resend and Brevo both require a domain you own before they will send to other people. Until then, use `EMAIL_PROVIDER=gmail`: it sends from your Gmail account through the Gmail API over HTTPS (about 500 emails/day). In Google Cloud Console, enable the Gmail API, create a **Desktop app** OAuth client, put its ID and secret in `.env`, and run `npm run gmail:auth` to get the refresh token. Set the OAuth consent screen to **In production** - refresh tokens for apps left in *Testing* expire after 7 days.
 
 4. **Start the server:**
    ```bash
