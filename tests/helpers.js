@@ -49,7 +49,9 @@ globalThis.fetch = async (url, options = {}) => {
  * before the app is imported (CORS and the rate limiter read them at load).
  */
 export async function setupApp(envOverrides = {}) {
-  const mongo = await MongoMemoryServer.create();
+  // Each test file starts its own MongoDB in parallel; the default 10s
+  // start-up limit is too tight on slower machines and CI runners
+  const mongo = await MongoMemoryServer.create({ instance: { launchTimeout: 60_000 } });
   Object.assign(process.env, TEST_ENV, envOverrides, { DB_URI: mongo.getUri("test") });
 
   const { default: app } = await import("../app.js");

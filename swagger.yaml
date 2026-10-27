@@ -103,6 +103,10 @@ components:
           type: boolean
           description: Whether the user has confirmed their email address
           example: true
+        hasPassword:
+          type: boolean
+          description: False for accounts created with Google sign-in (no password set)
+          example: true
         createdAt:
           type: string
           format: date-time
@@ -1359,6 +1363,77 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - User Profile
+      summary: Delete account
+      description: |
+        Permanently delete the signed-in user's account together with all of
+        their expenses, budgets and custom categories. This cannot be undone.
+
+        - Accounts with a password (`hasPassword: true`) confirm with `password`
+        - Google-only accounts (`hasPassword: false`) confirm with `confirmation: "DELETE"`
+        - A confirmation email is sent if the address is verified
+        - Existing tokens for the account stop working immediately
+        - Rate limited together with the other auth endpoints
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  format: password
+                  description: Current password (password accounts)
+                confirmation:
+                  type: string
+                  enum: [DELETE]
+                  description: Required for Google-only accounts
+      responses:
+        '200':
+          description: Account and data deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Your account and all of your data have been permanently deleted"
+                  deleted:
+                    type: object
+                    properties:
+                      expenses: { type: integer, example: 42 }
+                      budgets: { type: integer, example: 3 }
+                      categories: { type: integer, example: 2 }
+        '400':
+          description: Missing password or confirmation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not signed in, or the password is incorrect
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests
         '500':
           description: Internal server error
           content:

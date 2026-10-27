@@ -15,7 +15,8 @@ import {
   updateCurrency,
   getCurrentUser,
   verifyEmail,
-  resendVerification
+  resendVerification,
+  deleteAccount
 } from "../controllers/userController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
@@ -58,5 +59,7 @@ router.put('/profile', authMiddleware, updateProfile);
 router.put('/currency', authMiddleware, updateCurrency);
 router.put('/change-password', authMiddleware, changePassword);
 router.post('/resend-verification', authMiddleware, authLimiter, resendVerification);
+// Rate limited because it checks a password
+router.delete('/me', authMiddleware, authLimiter, deleteAccount);
 
 export default router;
