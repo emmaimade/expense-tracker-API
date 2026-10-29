@@ -1,5 +1,4 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { generateToken, hashToken } from "../utils/tokens.js";
 import { validatePassword } from "../utils/validators.js";
 import mongoose from "mongoose";
@@ -112,9 +111,6 @@ const registerUser = async (req, res) => {
     });
 
     await startSession(res, req, user._id);
-    // Older frontends still read this token from the body; remove once all
-    // clients use the session cookies
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     // Ask the user to confirm their address; the welcome email follows once they do.
     // A failure here doesn't block sign-up - they can resend from the dashboard.
@@ -128,7 +124,6 @@ const registerUser = async (req, res) => {
       success: true,
       message: "User created successfully",
       user: formatUser(user),
-      token,
     });
   } catch (error) {
     console.error("Registration error:", error);
@@ -158,16 +153,12 @@ const loginUser = async (req, res) => {
     await user.save();
 
     await startSession(res, req, user._id);
-    // Older frontends still read this token from the body; remove once all
-    // clients use the session cookies
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     res.status(200).json({
       success: true,
       message: "Login successful",
       user: formatUser(user),
       isFirstLogin,
-      token,
     });
   } catch (error) {
     console.error("Login error:", error);

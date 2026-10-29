@@ -23,8 +23,10 @@ info:
     - MongoDB Integration with Mongoose
 
     **Authentication:**
-    All protected routes require JWT authentication. Include the token in the Authorization header:
-    `Authorization: Bearer <your_token>`
+    Sign in with `POST /user/login` (or register): the API sets httpOnly session cookies
+    (`sw_access`, 15 min; `sw_refresh`, 30 days) that the browser sends automatically.
+    Renew with `POST /user/refresh`; sign out with `POST /user/logout`.
+    In this page, "Try it out" on login first - the cookie is then used for protected routes.
 
     **Base URL:** `https://expense-tracker-api-hvss.onrender.com`
 
@@ -44,11 +46,11 @@ servers:
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: JWT token obtained from login endpoint
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sw_access
+      description: httpOnly session cookie set by login/register (renew with /user/refresh)
 
   schemas:
     User:
@@ -988,10 +990,6 @@ components:
         message:
           type: string
           example: "Login successful"
-        token:
-          type: string
-          description: JWT authentication token
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
         user:
           type: object
           properties:
@@ -1281,7 +1279,7 @@ paths:
       tags:
         - Authentication
       summary: User login
-      description: Authenticate user with email and password to receive JWT token
+      description: Authenticate with email and password. Sets the httpOnly session cookies (sw_access, sw_refresh).
       requestBody:
         required: true
         content:
@@ -1343,7 +1341,7 @@ paths:
         - Account timestamps
         - Email change status
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: User profile retrieved successfully
@@ -1384,7 +1382,7 @@ paths:
         - Existing tokens for the account stop working immediately
         - Rate limited together with the other auth endpoints
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -1458,7 +1456,7 @@ paths:
         - Profile updates send confirmation email
         - Email changes trigger verification emails
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -1552,7 +1550,7 @@ paths:
       summary: Update preferred currency
       description: Update the authenticated user's preferred currency (ISO 4217 code).
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -1683,7 +1681,7 @@ paths:
         **Email Notification:**
         Confirmation email sent after successful change.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -1952,7 +1950,7 @@ paths:
         Send a new confirmation link to the signed-in user. Any previous link
         stops working. Rate limited together with the other auth endpoints.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: Confirmation email sent
@@ -2108,7 +2106,7 @@ paths:
         - Total count of expenses
         - Total amount sum
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: Expenses retrieved successfully
@@ -2135,7 +2133,7 @@ paths:
       summary: Add a new expense
       description: Create a new expense record for the authenticated user
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -2217,7 +2215,7 @@ paths:
       summary: Get expenses for the past 7 days
       description: Retrieve expenses from the last week for the authenticated user
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: Weekly expenses retrieved successfully
@@ -2245,7 +2243,7 @@ paths:
       summary: Get expenses for the past 30 days
       description: Retrieve expenses from the last month for the authenticated user
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: Monthly expenses retrieved successfully
@@ -2273,7 +2271,7 @@ paths:
       summary: Get expenses for the last 90 days
       description: Retrieve expenses from the last 3 months for the authenticated user
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: Three months expenses retrieved successfully
@@ -2306,7 +2304,7 @@ paths:
 
         **Example:** `?startDate=2025-10-01&endDate=2025-10-31`
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: startDate
           in: query
@@ -2391,7 +2389,7 @@ paths:
 
         **Default:** CSV format, all expenses
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: startDate
           in: query
@@ -2502,7 +2500,7 @@ paths:
 
         **Note:** All fields are optional - only send fields to update.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -2575,7 +2573,7 @@ paths:
 
         **Warning:** This action cannot be undone.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -2622,7 +2620,7 @@ paths:
       summary: Get all categories
       description: Retrieve all categories (user-defined and default) for the authenticated user
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         '200':
           description: Categories retrieved successfully
@@ -2649,7 +2647,7 @@ paths:
       summary: Create a new category
       description: Create a new user-defined category
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -2722,7 +2720,7 @@ paths:
       summary: Update a category
       description: Update an existing user-defined category
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -2807,7 +2805,7 @@ paths:
 
         **Warning:** This action cannot be undone.
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path
@@ -2882,7 +2880,7 @@ paths:
       summary: Get budget overview
       description: Retrieve an overview of all budgets with spending data for a specific month/year
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -2928,7 +2926,7 @@ paths:
       summary: Get total monthly budget
       description: Retrieve the total budget and category count for a specific month/year
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -2974,7 +2972,7 @@ paths:
       summary: Get budget trends
       description: "Retrieve budget trends over a specified period (default: last 6 months)"
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: months
           in: query
@@ -3012,7 +3010,7 @@ paths:
       summary: Get budget alerts
       description: Retrieve alerts for categories near or over budget for a specific month/year
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: month
           in: query
@@ -3058,7 +3056,7 @@ paths:
       summary: Create or update a budget
       description: Create or update a monthly budget for a category
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -3133,7 +3131,7 @@ paths:
       summary: Delete a budget
       description: Delete an existing budget for the authenticated user
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: id
           in: path

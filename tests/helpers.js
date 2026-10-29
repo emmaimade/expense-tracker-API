@@ -86,11 +86,16 @@ export async function setupApp(envOverrides = {}) {
 }
 
 // ── Request helpers ──────────────────────────────────────────────
-export const auth = (token) => ({ Authorization: `Bearer ${token}` });
+/** Request headers that authenticate with a session's access cookie. */
+export const auth = (token) => ({ Cookie: `sw_access=${token}` });
+
+/** The sw_access cookie value from a response's Set-Cookie headers. */
+const accessCookie = (res) =>
+  (res.headers["set-cookie"] || []).map((c) => c.split(";")[0]).find((c) => c.startsWith("sw_access="))?.slice("sw_access=".length);
 
 let userCounter = 0;
 
-/** Register a fresh user and return { email, token, user }. */
+/** Register a fresh user and return { email, token (access cookie), user }. */
 export async function createUser(api, overrides = {}) {
   userCounter += 1;
   const email = overrides.email || `user${userCounter}-${Date.now()}@test.io`;
@@ -105,7 +110,7 @@ export async function createUser(api, overrides = {}) {
   };
   const res = await api.post("/user/register").send(body);
   if (res.status !== 201) throw new Error(`register failed: ${res.status} ${JSON.stringify(res.body)}`);
-  return { email, token: res.body.token, user: res.body.user };
+  return { email, token: accessCookie(res), user: res.body.user };
 }
 
 /** Id of a default category (e.g. "Food"). */
