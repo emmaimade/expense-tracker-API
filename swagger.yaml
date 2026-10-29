@@ -1849,6 +1849,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /user/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh the session
+      description: |
+        Exchanges the `sw_refresh` httpOnly cookie for new `sw_access` (15 min)
+        and `sw_refresh` (30 days) cookies. Refresh tokens rotate on every use;
+        reusing an old one after rotation signs the user out everywhere.
+        Browsers send the cookie automatically - no request body is needed.
+      responses:
+        '200':
+          description: New cookies set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Missing, expired or revoked refresh token - sign in again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /user/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Sign out
+      description: Revokes this browser's session and clears the session cookies. Always returns 200.
+      responses:
+        '200':
+          description: Signed out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
   /user/verify-email:
     post:
       tags:

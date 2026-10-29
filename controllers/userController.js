@@ -10,6 +10,8 @@ import { detectCurrency } from '../utils/geoCurrency.js';
 import Expense from '../models/Expense.js';
 import Budget from '../models/Budget.js';
 import Category from '../models/Category.js';
+import Session from '../models/Session.js';
+import { startSession, rotateSession, revokeUserSessions, endSession, clearAuthCookies } from "../utils/session.js";
 import sendEmail from "../utils/email.js";
 import {
   welcomeEmail,
@@ -109,6 +111,9 @@ const registerUser = async (req, res) => {
       firstName, lastName, email, password: hashedPassword, currency: userCurrency, emailVerified: false,
     });
 
+    await startSession(res, req, user._id);
+    // Older frontends still read this token from the body; remove once all
+    // clients use the session cookies
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     // Ask the user to confirm their address; the welcome email follows once they do.
@@ -152,6 +157,9 @@ const loginUser = async (req, res) => {
     user.lastLoginAt = loginTime;
     await user.save();
 
+    await startSession(res, req, user._id);
+    // Older frontends still read this token from the body; remove once all
+    // clients use the session cookies
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     res.status(200).json({
@@ -229,6 +237,8 @@ const resetPassword = async (req, res) => {
     // Using the emailed reset link proves the user owns this address
     user.emailVerified = true;
     await user.save();
+    // Whoever knew the old password may be signed in somewhere: end every session
+    await revokeUserSessions(user._id);
 
     // Send confirmation email
     try {
@@ -453,6 +463,8 @@ const changePassword = async (req, res) => {
 
     user.password = await bcrypt.hash(newPassword, 10);
     await user.save();
+    // Sign out every other device; this one stays signed in
+    await revokeUserSessions(user._id, { except: req.user.sid });
 
     if (canEmail(user)) {
       try {
@@ -709,8 +721,10 @@ const deleteAccount = async (req, res) => {
       Expense.deleteMany({ userId: user._id }),
       Budget.deleteMany({ userId: user._id }),
       Category.deleteMany({ userId: user._id, isDefault: false }),
+      Session.deleteMany({ userId: user._id }),
     ]);
     await User.deleteOne({ _id: user._id });
+    clearAuthCookies(res);
 
     if (notify) {
       try {
@@ -737,6 +751,35 @@ const deleteAccount = async (req, res) => {
     console.error("Error deleting account:", error);
     res.status(500).json({ success: false, message: "Internal Server Error" });
   }
+};
+
+// ── Refresh Session ───────────────────────────────────────────────
+// Swap the refresh cookie for new access + refresh cookies (rotation)
+const refreshSession = async (req, res) => {
+  try {
+    const userId = await rotateSession(req, res);
+    const user = userId && (await User.findById(userId));
+    if (!user) {
+      clearAuthCookies(res);
+      return res.status(401).json({ success: false, message: "Your session has ended. Please sign in again." });
+    }
+    res.status(200).json({ success: true, user: formatUser(user) });
+  } catch (error) {
+    console.error("Error refreshing session:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+};
+
+// ── Logout ────────────────────────────────────────────────────────
+// Ends this browser's session; always succeeds so the client can sign out
+const logoutUser = async (req, res) => {
+  try {
+    await endSession(req);
+  } catch (error) {
+    console.error("Error ending session:", error);
+  }
+  clearAuthCookies(res);
+  res.status(200).json({ success: true, message: "Signed out" });
 };
 
 // ── Get Current User ──────────────────────────────────────────────
@@ -782,4 +825,6 @@ export {
   verifyEmail,
   resendVerification,
   deleteAccount,
+  refreshSession,
+  logoutUser,
 };
