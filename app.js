@@ -35,8 +35,9 @@ const corsOptions = {
   },
 };
 
-// Render sits behind a proxy; needed so rate limiting sees the real client IP
-app.set("trust proxy", 1);
+// Number of proxies in front of the app, so req.ip (used for rate limiting) is
+// the real client: 1 = Render only; 2 = Vercel's /api proxy + Render
+app.set("trust proxy", Number(process.env.TRUST_PROXY ?? 1));
 
 initializePassport();
 app.use(helmet());
