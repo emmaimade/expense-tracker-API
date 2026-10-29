@@ -18,6 +18,7 @@ const TEST_ENV = {
   BREVO_API_KEY: "test-brevo-key",
   RESEND_API_KEY: "re_test_key",
   AUTH_RATE_LIMIT: "1000",
+  ACCOUNT_RATE_LIMIT: "1000",
 };
 
 // ── Email stub ───────────────────────────────────────────────────
