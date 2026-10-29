@@ -16,7 +16,9 @@ import {
   getCurrentUser,
   verifyEmail,
   resendVerification,
-  deleteAccount
+  deleteAccount,
+  refreshSession,
+  logoutUser
 } from "../controllers/userController.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
@@ -30,6 +32,9 @@ router.post('/reset-password', authLimiter, resetPassword);
 router.get('/verify-email-change/current', verifyCurrentEmail);
 router.get('/verify-email-change/new', verifyNewEmail);
 router.post('/verify-email', verifyEmail);
+// Session cookies: refresh rotates them, logout clears them
+router.post('/refresh', refreshSession);
+router.post('/logout', logoutUser);
 
 // NEW: Currency detection endpoint (no auth needed - for registration)
 router.get('/detect-currency', (req, res) => {
