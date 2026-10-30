@@ -6,6 +6,7 @@ import Category from "../models/Category.js";
 import User from "../models/User.js";
 import { getCurrencySymbol } from '../utils/currency.js';
 import { isFutureDate } from '../utils/validators.js';
+import { checkBudgetAlert } from '../utils/budgetAlerts.js';
 
 // Reusable date range function
 // daysOrMonths: Negative for days back (e.g., -7), positive for months back (e.g., 1)
@@ -77,6 +78,7 @@ const addExpense = async (req, res) => {
       description,
       date: parsedDate,
     });
+    await checkBudgetAlert(req.user.id, expense.category, expense.date);
 
     // Populate category details
     const populatedExpense = await Expense.findById(expense._id).populate(
@@ -383,6 +385,7 @@ const updateExpense = async (req, res) => {
     }
 
     await existingExpense.save();
+    await checkBudgetAlert(userId, existingExpense.category, existingExpense.date);
     const updatedExpense = await Expense.findById(existingExpense._id).populate(
       "category",
       "name isDefault"

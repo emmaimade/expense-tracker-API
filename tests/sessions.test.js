@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import request from "supertest";
 import jwt from "jsonwebtoken";
 import { setupApp, createUser, auth, PASSWORD } from "./helpers.js";
-import { callbackRedirectUrl } from "../routes/auth.js";
 
 let ctx;
 before(async () => { ctx = await setupApp(); });
@@ -170,23 +169,23 @@ describe("ending sessions", () => {
   });
 });
 
-describe("compatibility", () => {
-  it("still accepts Bearer tokens from older clients", async () => {
+describe("cookie-only authentication", () => {
+  it("no longer returns a token in login or register responses", async () => {
+    const { email, user } = await createUser(ctx.api);
+    assert.ok(user);
+    const login = await ctx.api.post("/user/login").send({ email, password: PASSWORD });
+    assert.equal(login.body.token, undefined);
+  });
+
+  it("rejects Authorization: Bearer tokens", async () => {
     const { token } = await createUser(ctx.api);
-    assert.equal((await ctx.api.get("/user/me").set(auth(token))).status, 200);
-  });
-});
-
-describe("Google sign-in redirect", () => {
-  const opts = { frontendUrl: "https://spendwise.vercel.app", secret: "s" };
-
-  it("sends no token in the URL when Google returns through the app's /api proxy", () => {
-    const url = callbackRedirectUrl("u1", { ...opts, baseUrl: "https://spendwise.vercel.app/api" });
-    assert.equal(url, "https://spendwise.vercel.app/auth/callback");
+    assert.equal((await ctx.api.get("/user/me").set("Authorization", `Bearer ${token}`)).status, 401);
+    assert.equal((await ctx.api.get("/user/me").set(auth(token))).status, 200, "the same token works as the cookie");
   });
 
-  it("keeps the old token-in-URL flow while BASE_URL is the API's own address", () => {
-    const url = callbackRedirectUrl("u1", { ...opts, baseUrl: "https://api.onrender.com" });
-    assert.match(url, /^https:\/\/spendwise\.vercel\.app\/auth\/callback\?token=[\w-]+\.[\w-]+\.[\w-]+&userId=u1$/);
+  it("rejects old-style tokens without a session", async () => {
+    const { user } = await createUser(ctx.api);
+    const legacy = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+    assert.equal((await ctx.api.get("/user/me").set(auth(legacy))).status, 401);
   });
 });

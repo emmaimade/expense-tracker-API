@@ -25,7 +25,8 @@ describe("user response shape", () => {
     assert.equal(login.body.user.fullName, "Ada Lovelace");
     assert.equal(login.body.user.currencySymbol, "₦");
 
-    const token = login.body.token;
+    // The session lives in the sw_access cookie, not the response body
+    const token = login.headers["set-cookie"].find((c) => c.startsWith("sw_access=")).split(";")[0].slice("sw_access=".length);
     const me = await ctx.api.get("/user/me").set(auth(token));
     assertCoreFields(me.body.user, "/me");
     assert.ok(me.body.user.createdAt);

@@ -91,7 +91,11 @@ describe("Google-only accounts", () => {
       firstName: "Gina", lastName: "Google", email, password: "GOOGLE_AUTH_abc123",
       googleId: "g-123", currency: "USD", emailVerified: true,
     });
-    return { email, token: jwt.sign({ id: insertedId }, process.env.JWT_SECRET) };
+    // Sign in the way the Google callback does: a session plus its access token
+    const session = await ctx.db.collection("sessions").insertOne({
+      userId: insertedId, refreshTokenHash: `test-${Date.now()}`, expiresAt: new Date(Date.now() + 60_000), revokedAt: null, replacedBy: null,
+    });
+    return { email, token: jwt.sign({ id: insertedId, sid: session.insertedId }, process.env.JWT_SECRET) };
   }
 
   it("report hasPassword: false", async () => {

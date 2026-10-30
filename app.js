@@ -15,6 +15,7 @@ import userRoutes from "./routes/user.js";
 import expenseRoutes from "./routes/expense.js";
 import categoryRoutes from "./routes/category.js";
 import budgetRoutes from "./routes/budget.js";
+import notificationRoutes from "./routes/notification.js";
 import authRoutes from './routes/auth.js';
 import sanitizeMiddleware from './middleware/sanitizeMiddleware.js';
 
@@ -133,6 +134,7 @@ app.use("/user", userRoutes);
 app.use("/expense", expenseRoutes);
 app.use("/category", categoryRoutes);
 app.use("/budget", budgetRoutes);
+app.use("/notifications", notificationRoutes);
 app.use('/auth', authRoutes);
 
 // ========================================

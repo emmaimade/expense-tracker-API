@@ -1,5 +1,4 @@
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import { generateToken, hashToken } from "../utils/tokens.js";
 import { validatePassword } from "../utils/validators.js";
 import mongoose from "mongoose";
@@ -10,6 +9,7 @@ import { detectCurrency } from '../utils/geoCurrency.js';
 import Expense from '../models/Expense.js';
 import Budget from '../models/Budget.js';
 import Category from '../models/Category.js';
+import Notification from '../models/Notification.js';
 import Session from '../models/Session.js';
 import { startSession, rotateSession, revokeUserSessions, endSession, clearAuthCookies } from "../utils/session.js";
 import sendEmail from "../utils/email.js";
@@ -112,9 +112,6 @@ const registerUser = async (req, res) => {
     });
 
     await startSession(res, req, user._id);
-    // Older frontends still read this token from the body; remove once all
-    // clients use the session cookies
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     // Ask the user to confirm their address; the welcome email follows once they do.
     // A failure here doesn't block sign-up - they can resend from the dashboard.
@@ -128,7 +125,6 @@ const registerUser = async (req, res) => {
       success: true,
       message: "User created successfully",
       user: formatUser(user),
-      token,
     });
   } catch (error) {
     console.error("Registration error:", error);
@@ -158,16 +154,12 @@ const loginUser = async (req, res) => {
     await user.save();
 
     await startSession(res, req, user._id);
-    // Older frontends still read this token from the body; remove once all
-    // clients use the session cookies
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "1d" });
 
     res.status(200).json({
       success: true,
       message: "Login successful",
       user: formatUser(user),
       isFirstLogin,
-      token,
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -721,6 +713,7 @@ const deleteAccount = async (req, res) => {
       Expense.deleteMany({ userId: user._id }),
       Budget.deleteMany({ userId: user._id }),
       Category.deleteMany({ userId: user._id, isDefault: false }),
+      Notification.deleteMany({ userId: user._id }),
       Session.deleteMany({ userId: user._id }),
     ]);
     await User.deleteOne({ _id: user._id });

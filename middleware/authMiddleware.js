@@ -1,22 +1,11 @@
 import jwt from "jsonwebtoken";
-import User from "../models/User.js";
 import Session from "../models/Session.js";
 import { ACCESS_COOKIE } from "../utils/session.js";
 
-// Accepts the httpOnly access cookie, or an Authorization: Bearer header from
-// clients that still use tokens (the frontend before cookies, API tools).
-const getToken = (req) => {
-  const cookie = req.cookies?.[ACCESS_COOKIE];
-  if (typeof cookie === "string" && cookie) return cookie;
-
-  const header = req.headers.authorization;
-  if (typeof header === "string" && header.startsWith("Bearer ")) return header.slice(7);
-  return null;
-};
-
+// Authenticates with the httpOnly access cookie set at sign-in
 const authMiddleware = async (req, res, next) => {
-  const token = getToken(req);
-  if (!token) {
+  const token = req.cookies?.[ACCESS_COOKIE];
+  if (typeof token !== "string" || !token) {
     return res.status(401).json({ success: false, message: "Access Denied" });
   }
 
@@ -30,13 +19,10 @@ const authMiddleware = async (req, res, next) => {
   }
 
   try {
-    // Session tokens die as soon as their session is revoked (logout, password
-    // change, account deletion). Older tokens without a session only need the
-    // account to still exist.
-    const stillValid = decoded.sid
-      ? await Session.exists({ _id: decoded.sid, userId: decoded.id, revokedAt: null })
-      : await User.exists({ _id: decoded.id });
-    if (!stillValid) {
+    // Sessions end immediately on logout, password change or account deletion
+    const active = decoded.sid
+      && await Session.exists({ _id: decoded.sid, userId: decoded.id, revokedAt: null });
+    if (!active) {
       return res.status(401).json({ success: false, message: "Your session has ended. Please sign in again." });
     }
   } catch (error) {
