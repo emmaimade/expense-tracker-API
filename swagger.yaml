@@ -1202,6 +1202,125 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /notifications:
+    get:
+      tags:
+        - Notifications
+      summary: List notifications
+      description: |
+        The user's notifications, newest first, plus the unread count.
+
+        - **Budget alerts** are created by the server when spending in a budgeted
+          category reaches 80%, 100% or 120% of its limit for the month (after an
+          expense is added/edited or a budget is set). Only the highest threshold
+          reached is reported, once per budget per month.
+        - A **new month** notice is added the first time notifications are fetched
+          in a month (accounts created before that month only).
+        - Notifications expire after 90 days.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: Notifications
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: true }
+                  data:
+                    type: object
+                    properties:
+                      unreadCount: { type: integer, example: 2 }
+                      notifications:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id: { type: string }
+                            type: { type: string, enum: [budget_alert, monthly_reset] }
+                            priority: { type: string, enum: [low, medium, high] }
+                            title: { type: string, example: "Budget exceeded" }
+                            message: { type: string, example: "You've spent $110.00 of $100.00 on Food this month - $10.00 over budget." }
+                            actionUrl: { type: string, example: "/dashboard/budgets" }
+                            read: { type: boolean }
+                            createdAt: { type: string, format: date-time }
+        '401':
+          description: Not signed in
+    delete:
+      tags:
+        - Notifications
+      summary: Clear all notifications
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /notifications/read-all:
+    patch:
+      tags:
+        - Notifications
+      summary: Mark all notifications as read
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+
+  /notifications/{id}/read:
+    patch:
+      tags:
+        - Notifications
+      summary: Mark a notification as read
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Marked as read
+        '400':
+          description: Invalid id
+        '404':
+          description: Not found (or belongs to another user)
+
+  /notifications/{id}:
+    delete:
+      tags:
+        - Notifications
+      summary: Delete a notification
+      description: Hides the notification so the same alert isn't recreated by later expenses.
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Deleted
+        '400':
+          description: Invalid id
+        '404':
+          description: Not found (or belongs to another user)
+
   /user/register:
     post:
       tags:

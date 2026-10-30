@@ -2,6 +2,7 @@ import Budget from '../models/Budget.js';
 import Category from '../models/Category.js';
 import User from '../models/User.js';
 import { getCurrencySymbol } from '../utils/currency.js';
+import { checkBudgetAlert } from '../utils/budgetAlerts.js';
 
 // GET: Budget overview with totals and spending
 const getBudgetOverview = async (req, res) => {
@@ -156,6 +157,9 @@ const setMonthlyBudget = async (req, res) => {
       { amount },
       { new: true, upsert: true, runValidators: true }
     ).populate('categoryId', 'name');
+
+    // A lower budget can already be used up by this month's spending
+    await checkBudgetAlert(userId, categoryId, new Date(year, month - 1, 15));
 
     // Get updated total monthly budget
     const totalBudgetInfo = await Budget.getTotalMonthlyBudget(userId, month, year);

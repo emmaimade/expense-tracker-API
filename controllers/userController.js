@@ -9,6 +9,7 @@ import { detectCurrency } from '../utils/geoCurrency.js';
 import Expense from '../models/Expense.js';
 import Budget from '../models/Budget.js';
 import Category from '../models/Category.js';
+import Notification from '../models/Notification.js';
 import Session from '../models/Session.js';
 import { startSession, rotateSession, revokeUserSessions, endSession, clearAuthCookies } from "../utils/session.js";
 import sendEmail from "../utils/email.js";
@@ -712,6 +713,7 @@ const deleteAccount = async (req, res) => {
       Expense.deleteMany({ userId: user._id }),
       Budget.deleteMany({ userId: user._id }),
       Category.deleteMany({ userId: user._id, isDefault: false }),
+      Notification.deleteMany({ userId: user._id }),
       Session.deleteMany({ userId: user._id }),
     ]);
     await User.deleteOne({ _id: user._id });
