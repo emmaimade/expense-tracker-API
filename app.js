@@ -18,6 +18,7 @@ import budgetRoutes from "./routes/budget.js";
 import notificationRoutes from "./routes/notification.js";
 import authRoutes from './routes/auth.js';
 import sanitizeMiddleware from './middleware/sanitizeMiddleware.js';
+import errorHandler from './middleware/errorHandler.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -156,19 +157,7 @@ app.use("*", (req, res) => {
   });
 });
 
-// Global error handler for uncaught errors
-app.use((error, req, res, next) => {
-  console.error("Unhandled error:", error);
-
-  res.status(error.status || 500).json({
-    success: false,
-    message: error.message || "Internal server error",
-    error:
-      process.env.NODE_ENV === "development"
-        ? error.stack
-        : "Something went wrong",
-    timestamp: new Date().toISOString(),
-  });
-});
+// Global error handler: 5xx details stay in the server log (see middleware/errorHandler.js)
+app.use(errorHandler);
 
 export default app;
