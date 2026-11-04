@@ -240,12 +240,12 @@ const deleteCategory = async (req, res) => {
         : `Category ${category.name} deleted successfully`,
     });
   } catch (err) {
-    console.log("Error deleting category:", err);
+    console.error("Error deleting category:", err);
 
     res.status(500).json({
       success: false,
       message: "Failed to delete category",
-      error: err.message,
+      error: process.env.NODE_ENV === "development" ? err.stack : undefined,
     });
   }
 };

@@ -122,11 +122,12 @@ app.get("/health", async (req, res) => {
       environment: process.env.NODE_ENV || "development",
     });
   } catch (error) {
+    // Public endpoint: connection errors can name the database host, so log them only
+    console.error("Health check failed:", error);
     res.status(503).json({
       status: "ERROR",
       timestamp: new Date().toISOString(),
       database: "disconnected",
-      error: error.message,
     });
   }
 });

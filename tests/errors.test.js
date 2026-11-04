@@ -1,6 +1,6 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { setupApp } from "./helpers.js";
+import { setupApp, createUser, auth } from "./helpers.js";
 import { errorHandler } from "../middleware/errorHandler.js";
 
 // Minimal stand-in for Express's response object
@@ -66,6 +66,39 @@ describe("error handler", () => {
     });
     assert.equal(forwarded?.message, "late");
     assert.equal(res.body, null);
+  });
+});
+
+describe("failures in endpoints that handle their own errors", () => {
+  let ctx;
+  before(async () => { ctx = await setupApp(); });
+  after(async () => { await ctx.close(); });
+
+  it("doesn't expose a database error from /health", async (t) => {
+    const { default: mongoose } = await import("mongoose");
+    t.mock.method(console, "error", () => {});
+    t.mock.method(mongoose.connection.db, "admin", () => {
+      throw new Error("connect ECONNREFUSED secret-db-host:27017");
+    });
+
+    const res = await ctx.api.get("/health");
+    assert.equal(res.status, 503);
+    assert.equal(res.body.database, "disconnected");
+    assert.ok(!JSON.stringify(res.body).includes("secret-db-host"));
+  });
+
+  it("doesn't expose a database error when deleting a category", async (t) => {
+    const { default: Category } = await import("../models/Category.js");
+    const { token } = await createUser(ctx.api);
+    t.mock.method(console, "error", () => {});
+    t.mock.method(Category, "findOne", () => {
+      throw new Error("MongoServerError: secret-db-host unavailable");
+    });
+
+    const res = await ctx.api.delete("/category/507f1f77bcf86cd799439011").set(auth(token));
+    assert.equal(res.status, 500);
+    assert.equal(res.body.message, "Failed to delete category");
+    assert.ok(!JSON.stringify(res.body).includes("secret-db-host"));
   });
 });
 
